@@ -488,17 +488,66 @@ pub fn analyze_frames(signal: &[f32], config: &YinConfig) -> FrameAnalysis {
         let spectrum = magnitude_spectrum(&frame, &window, &fft, &mut buffer);
         weigh_by_salience(&mut posterior, &spectrum, bin_hz, config);
 
+        // Strongest peak magnitude, used for missing fundamental check.
+        let strongest = spectrum.iter().copied().fold(0.0f32, f32::max) as f64;
+
         let Some(candidate) = posterior.best() else {
             start += config.hop_size;
             continue;
         };
         let lag = candidate.lag;
         let refined = parabolic_refine(&candidate);
-        let frequency = if refined > 0.0 {
+        let mut frequency = if refined > 0.0 {
             config.sample_rate as f64 / refined
         } else {
             0.0
         };
+
+        // Missing fundamental check: guitar open strings in standard tuning
+        // are E2(82.4), A2(110.0), D3(146.8), G3(196.0), B3(246.9), E4(329.6).
+        // When the detector locks onto a harmonic (e.g. B3 at 247 Hz instead
+        // of E2 at 82 Hz), the detected frequency is often an exact integer
+        // multiple of the true fundamental. We check: is the detected
+        // frequency 2x or 3x a guitar open string? If so, and the lower
+        // frequency has any spectral energy, prefer the open string.
+        if frequency > 0.0 {
+            let open_strings: [f64; 6] = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
+            for divisor in [2.0, 3.0] {
+                let sub_freq = frequency / divisor;
+                if sub_freq < config.min_frequency {
+                    continue;
+                }
+                // Is sub_freq close to a guitar open string?
+                let is_open_string = open_strings.iter().any(|&os| (sub_freq - os).abs() < 5.0);
+                if !is_open_string {
+                    continue;
+                }
+                // Does the sub-harmonic have any spectral energy?
+                let bin = (sub_freq / bin_hz).round() as usize;
+                if bin < spectrum.len() {
+                    let low = bin.saturating_sub(1);
+                    let high = (bin + 1).min(spectrum.len() - 1);
+                    let sub_energy = spectrum[low..=high].iter().copied().fold(0.0f32, f32::max) as f64;
+                    // Even weak energy at the open string frequency suggests
+                    // it's the true fundamental, not a harmonic.
+                    if sub_energy > strongest * 0.02 {
+                        frequency = sub_freq;
+                        // Update the lag to match so pitch_distribution uses
+                        // the corrected frequency instead of the harmonic.
+                        let corrected_lag =
+                            (config.sample_rate as f64 / frequency).round() as usize;
+                        for c in posterior.candidates.iter_mut() {
+                            if c.lag == lag {
+                                c.lag = corrected_lag;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         let probability = (1.0 - normalized[lag]).clamp(0.0, 1.0);
         let probability = if frequency > 0.0 { probability } else { 0.0 };
 
