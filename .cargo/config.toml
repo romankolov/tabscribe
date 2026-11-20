@@ -1,0 +1,8 @@
+[build]
+# Keep incremental builds fast in CI and dev.
+incremental = true
+
+[env]
+# Allow overriding the model directory at build time so CI can vendor models.
+# (Only used by build scripts; runtime lookup is done by tabscribe-models.)
+TABSCRIBE_MODEL_DIR = { value = "models", relative = true }

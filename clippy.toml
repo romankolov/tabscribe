@@ -1,0 +1,4 @@
+msrv = "1.82"
+# `expect_used`/`unwrap_used` are banned in library crates via crate-level lint attributes
+# (see crates/tabscribe-core/src/lib.rs) rather than here, so that the CLI and test
+# helpers stay ergonomic.
