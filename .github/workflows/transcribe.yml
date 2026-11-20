@@ -1,0 +1,79 @@
+name: Transcribe Audio
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    
+    - name: Install system dependencies
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev libusb-1.0-0-dev
+    
+    - name: Download MP3 from filebin
+      run: |
+        curl -L -o Untitled.mp3 "https://filebin.net/vqrdezgzijdd5owm/Untitled.mp3"
+        curl -L -o Untitled.gp5 "https://filebin.net/vqrdezgzijdd5owm/Untitled.gp5"
+        ls -la Untitled.mp3 Untitled.gp5
+    
+    - name: Build tabscribe (release)
+      run: cargo build --release
+    
+    - name: Run transcription
+      run: |
+        mkdir -p output
+        ./target/release/tabscribe transcribe Untitled.mp3 -o output --engine auto
+        echo "Transcription complete"
+    
+    - name: Show transcription summary
+      run: |
+        cat output/Untitled.json | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+print(f'Notes: {len(data[\"notes\"])}')
+print(f'Tempo: {data[\"musical\"][\"tempo\"][\"bpm\"]:.1f} BPM')
+print(f'Time signature: {data[\"musical\"][\"time_signature\"]}')
+print(f'Key: {data[\"musical\"][\"key\"]}')
+print(f'Duration: {data[\"musical\"][\"duration\"]:.2f}s')
+"
+    
+    - name: Upload transcription artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: tabscribe-output
+        path: output/
+        retention-days: 7
+    
+    - name: Upload MIDI file
+      uses: actions/upload-artifact@v4
+      with:
+        name: tabscribe-midi
+        path: output/Untitled.mid
+        retention-days: 7
+    
+    - name: Upload MusicXML file
+      uses: actions/upload-artifact@v4
+      with:
+        name: tabscribe-musicxml
+        path: output/Untitled.musicxml
+        retention-days: 7
+    
+    - name: Upload ASCII tablature
+      uses: actions/upload-artifact@v4
+      with:
+        name: tabscribe-tab
+        path: output/Untitled.txt
+        retention-days: 7
