@@ -35,7 +35,7 @@ fn debug_pipeline() {
     for f in [220.0, 261.63, 329.63, 440.0, 329.63, 261.63, 220.0, 196.0] {
         signal.extend(tone(f, 0.35, sr));
     }
-    
+
     let spectrum = tabscribe_core::transcribe::rhythm::SpectrumConfig::for_sample_rate(sr);
     let envelope = tabscribe_core::transcribe::rhythm::onset_envelope(&signal, sr, &spectrum);
     let est = tabscribe_core::transcribe::rhythm::estimate_tempo(&envelope);

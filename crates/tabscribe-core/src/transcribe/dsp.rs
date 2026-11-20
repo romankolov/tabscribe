@@ -401,10 +401,7 @@ fn magnitude_spectrum(
     }
     fft.process(buffer);
     let bins = buffer.len() / 2 + 1;
-    buffer[..bins]
-        .iter()
-        .map(|value| value.norm())
-        .collect()
+    buffer[..bins].iter().map(|value| value.norm()).collect()
 }
 
 /// The harmonic salience of a frequency in a spectrum.
@@ -912,6 +909,64 @@ fn _smooth_frequencies(frames: &[Frame], config: &YinConfig) -> Vec<Frame> {
         smoothed[index].frequency = median.exp() * config.sample_rate as f64;
     }
     smoothed
+}
+
+/// Detect the tuning offset of a recording in semitones.
+///
+/// The offset is measured relative to standard concert pitch (A4 = 440 Hz).
+/// A positive value means the recording is sharp (e.g. +3 = three semitones
+/// sharp), and the detected notes should be transposed down by this amount.
+///
+/// The detection works by computing the chroma of the signal and scoring each
+/// candidate semitone offset against a template of open-string guitar pitches
+/// (E2, A2, D3, G3, B3, E4). The offset with the best score is returned.
+///
+/// Returns `None` when the signal is too quiet or too noisy to determine a
+/// reliable offset.
+#[must_use]
+pub fn detect_tuning_offset(signal: &[f32], sample_rate: u32) -> Option<f64> {
+    if signal.is_empty() {
+        return None;
+    }
+
+    // Compute the chroma of the full signal.
+    let chroma = crate::transcribe::harmony::chroma_of(signal, sample_rate);
+    let total: f64 = chroma.iter().sum::<f64>();
+    if total <= 0.0 {
+        return None;
+    }
+
+    // Open-string guitar pitches in MIDI note numbers.
+    const STRINGS: [u8; 6] = [40, 45, 50, 55, 59, 64];
+
+    // Score each candidate offset from -2 to +2 semitones (beyond that is
+    // almost certainly a different instrument, not a tuning offset).
+    let mut best_offset: Option<f64> = None;
+    let mut best_score: f64 = f64::NEG_INFINITY;
+
+    for offset in -6..=6 {
+        let mut score: f64 = 0.0;
+        for &string in &STRINGS {
+            // Where this string's pitch would appear if shifted by offset.
+            let shifted = (string as i32 + offset) as u8;
+            let pc = shifted % 12;
+            // Weight by the chroma energy at this pitch class.
+            score += chroma[pc as usize] / total;
+        }
+        // Prefer offsets close to zero (Occam's razor).
+        let score = score - (offset as f64).abs() * 0.05;
+        if score > best_score {
+            best_score = score;
+            best_offset = Some(offset as f64);
+        }
+    }
+
+    // Only return an offset if the score is confident.
+    if best_score > 0.25 {
+        best_offset
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

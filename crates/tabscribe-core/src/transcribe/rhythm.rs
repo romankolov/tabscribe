@@ -106,10 +106,7 @@ fn magnitude_spectrum(
     }
     fft.process(buffer);
     let bins = buffer.len() / 2 + 1;
-    buffer[..bins]
-        .iter()
-        .map(|value| value.norm())
-        .collect()
+    buffer[..bins].iter().map(|value| value.norm()).collect()
 }
 
 /// Compute the onset envelope of a signal.

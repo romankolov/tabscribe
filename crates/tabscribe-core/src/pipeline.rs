@@ -53,6 +53,13 @@ pub struct PipelineOptions {
     pub tempo_override: Option<Tempo>,
     /// An explicit meter, which overrides the detection.
     pub meter_override: Option<TimeSignature>,
+    /// The tuning offset in semitones (None = auto-detect from the audio).
+    ///
+    /// When a recording is tuned sharp or flat relative to standard pitch,
+    /// this offset compensates so that the transcribed pitches match standard
+    /// notation. A value of +3 means the audio is three semitones sharp and
+    /// will be transposed down by three semitones.
+    pub tuning_offset: Option<f64>,
 }
 
 impl Default for PipelineOptions {
@@ -69,6 +76,7 @@ impl Default for PipelineOptions {
             detect_techniques: true,
             tempo_override: None,
             meter_override: None,
+            tuning_offset: None,
         }
     }
 }
@@ -188,6 +196,25 @@ impl Pipeline {
         let mut notes =
             self.transcriber
                 .transcribe(signal, sample_rate, &self.options.detection)?;
+
+        // ── 1b. Tuning offset ─────────────────────────────────────────────
+        //
+        // When a recording is tuned sharp or flat relative to standard pitch,
+        // every detected note is shifted by the same amount. We detect the
+        // offset from the audio and transpose the notes back to standard
+        // notation, so that the tablature matches what a guitarist would play.
+        let offset = self.options.tuning_offset.unwrap_or_else(|| {
+            crate::transcribe::dsp::detect_tuning_offset(signal, sample_rate).unwrap_or(0.0)
+        });
+        if offset != 0.0 {
+            let shift = (-offset) as i8;
+            for note in &mut notes {
+                let new_pitch = (note.pitch.as_u8() as i32 + shift as i32).clamp(0, 127);
+                if let Ok(p) = crate::music::MidiNote::new(new_pitch as u8) {
+                    note.pitch = p;
+                }
+            }
+        }
 
         // ── 2. Rhythm ─────────────────────────────────────────────────────
         let spectrum = SpectrumConfig::for_sample_rate(sample_rate);

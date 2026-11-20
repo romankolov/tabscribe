@@ -37,7 +37,11 @@ pub fn list(paths: bool) -> Result<()> {
         let status = if path.exists() { "present" } else { "missing" };
         println!("  {:<16} {}", entry.name, status);
         println!("  {:<16} {}", "", entry.description);
-        println!("  {:<16} {}", "", format_args!("license: {}", entry.license));
+        println!(
+            "  {:<16} {}",
+            "",
+            format_args!("license: {}", entry.license)
+        );
         println!("  {:<16} {}", "", format_args!("source: {}", entry.source));
         println!("  {:<16} {}", "", format_args!("sha256: {}", entry.sha256));
         if paths {

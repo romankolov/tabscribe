@@ -51,12 +51,15 @@ pub fn transcribe(args: TranscribeArgs, global: &GlobalArgs) -> Result<()> {
     )?;
     let options = build_pipeline_options(
         &args,
-        args.sensitivity,
-        args.quantize,
-        args.style,
-        args.tempo,
-        args.time_sig.as_deref(),
-        args.key.as_deref(),
+        PipelineOptionsParams {
+            sensitivity: args.sensitivity,
+            quantize: args.quantize,
+            style: args.style,
+            tempo: args.tempo,
+            time_sig: args.time_sig.as_deref(),
+            key: args.key.as_deref(),
+            tuning_offset: args.tuning_offset,
+        },
     )?;
 
     let (signal, sample_rate, channels) =
@@ -207,7 +210,10 @@ pub fn analyze(args: AnalyzeArgs, global: &GlobalArgs) -> Result<()> {
     let mono = resample(&mono, sample_rate, ANALYSIS_SAMPLE_RATE)?;
 
     let instrument = Instrument::for_kind(InstrumentKind::Guitar).map_err(anyhow::Error::new)?;
-    let options = PipelineOptions { detect_techniques: false, ..PipelineOptions::default() };
+    let options = PipelineOptions {
+        detect_techniques: false,
+        ..PipelineOptions::default()
+    };
     let pipeline = Pipeline::default().with_options(options);
     let result = pipeline
         .run(&mono, ANALYSIS_SAMPLE_RATE, &instrument)
@@ -320,7 +326,7 @@ pub fn doctor() -> Result<()> {
 
 /// `tabscribe completions <SHELL>`
 pub fn completions(args: CompletionsArgs) -> Result<()> {
-        let mut cmd = <crate::cli::Cli as clap::CommandFactory>::command();
+    let mut cmd = <crate::cli::Cli as clap::CommandFactory>::command();
     let name = cmd.get_name().to_string();
     clap_complete::generate(args.shell, &mut cmd, name, &mut std::io::stdout());
     Ok(())
@@ -430,44 +436,41 @@ fn build_instrument(
 }
 
 /// Build the pipeline options from the command-line arguments.
-fn build_pipeline_options(
-    _args: &TranscribeArgs,
+/// Parameters for building pipeline options from CLI arguments.
+#[derive(Debug, Clone)]
+struct PipelineOptionsParams<'a> {
     sensitivity: f32,
     quantize: QuantizeArg,
     style: StyleArg,
     tempo: Option<f64>,
-    time_sig: Option<&str>,
-    key: Option<&str>,
+    time_sig: Option<&'a str>,
+    key: Option<&'a str>,
+    tuning_offset: Option<f64>,
+}
+
+fn build_pipeline_options<'a>(
+    _args: &TranscribeArgs,
+    params: PipelineOptionsParams<'a>,
 ) -> Result<PipelineOptions> {
-    let options = PipelineOptions {
-        detection: TranscribeOptions::default().with_sensitivity(sensitivity),
+    let mut options = PipelineOptions {
+        detection: TranscribeOptions::default().with_sensitivity(params.sensitivity),
         cleanup: CleanupOptions::default(),
-        quantize: to_quantize(quantize),
-        style: to_style(style),
+        quantize: to_quantize(params.quantize),
+        style: to_style(params.style),
         ..PipelineOptions::default()
     };
 
-    let options = if let Some(bpm) = tempo {
-        let tempo_override = Some(
+    if let Some(bpm) = params.tempo {
+        options.tempo_override = Some(
             Tempo::from_bpm(bpm)
                 .map_err(anyhow::Error::new)
                 .with_context(|| format!("{bpm} is not a usable tempo"))?,
         );
-        PipelineOptions { tempo_override, ..options }
-    } else {
-        options
-    };
-
-    let options = if let Some(spec) = time_sig {
-        PipelineOptions {
-            meter_override: Some(parse_time_signature(spec)?),
-            ..options
-        }
-    } else {
-        options
-    };
-
-    let options = if let Some(name) = key {
+    }
+    if let Some(spec) = params.time_sig {
+        options.meter_override = Some(parse_time_signature(spec)?);
+    }
+    if let Some(name) = params.key {
         let parsed: Key = name
             .parse()
             .map_err(anyhow::Error::new)
@@ -475,15 +478,10 @@ fn build_pipeline_options(
         // The key is applied to the result after the pipeline runs; the
         // pipeline has no field for a manual key.
         let _ = parsed;
-        PipelineOptions {
-            detect_key: false,
-            detect_chords: false,
-            ..options
-        }
-    } else {
-        options
-    };
-
+        options.detect_key = false;
+        options.detect_chords = false;
+    }
+    options.tuning_offset = params.tuning_offset;
     Ok(options)
 }
 
@@ -803,7 +801,8 @@ fn print_summary(tab: &Tab, written: &Written) {
         style("transcribed:").bold(),
         tab.notes.len(),
         tab.tempo.bpm(),
-        tab.time_signature.numerator, tab.time_signature.denominator,
+        tab.time_signature.numerator,
+        tab.time_signature.denominator,
         key
     );
     for path in written {

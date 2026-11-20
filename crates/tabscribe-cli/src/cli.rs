@@ -230,6 +230,14 @@ pub struct TranscribeArgs {
     #[arg(long = "key", value_name = "KEY")]
     pub key: Option<String>,
 
+    /// Tuning offset in semitones relative to standard pitch (None = auto).
+    ///
+    /// A positive value means the recording is sharp and will be transposed
+    /// down. For example --tuning-offset 3 compensates for a recording that
+    /// is three semitones sharp.
+    #[arg(long = "tuning-offset", value_name = "SEMITONES")]
+    pub tuning_offset: Option<f64>,
+
     /// Note detection sensitivity, from 0.0 (conservative) to 1.0 (permissive).
     #[arg(long = "sensitivity", value_name = "X", default_value_t = 0.5)]
     pub sensitivity: f32,
@@ -268,6 +276,7 @@ impl Default for TranscribeArgs {
             tempo: None,
             time_sig: None,
             key: None,
+            tuning_offset: None,
             sensitivity: 0.5,
             max_fret: None,
             max_span: None,

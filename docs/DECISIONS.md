@@ -304,3 +304,32 @@ by the library.
 **Alternatives.** No salience weighting (more octave errors), more than six
 harmonics (adds Nyquist-limited noise), and exponent ≫ 1 (lets salience
 overrule clear probability differences, which worsened results).
+
+---
+
+## D-0016 — Tuning offset detection and compensation
+
+**Decision.** The pipeline can detect and compensate for a tuning offset
+between the recording and standard concert pitch. The offset is measured in
+semitones (positive = recording is sharp) and applied by transposing all
+detected notes in the opposite direction. A `--tuning-offset` CLI option
+allows manual override; when omitted, `detect_tuning_offset` estimates the
+offset from the signal's chroma matched against open-string guitar pitches.
+
+**Why.** The reference recording is approximately three semitones sharp
+relative to the Guitar Pro notation: at 4.286 s the MP3 fundamental is
+≈349.9 Hz (F4/MIDI 65) where the GP notates D4 (MIDI 62). Without
+compensation, all detected pitches carry a +3 semitone bias. With
+`--tuning-offset 3`, pitch exactness on matched notes improves from 84.6%
+to 88.5% and the residual offset collapses to 0 semitones.
+
+**Auto-detection limitations.** The chroma-based auto-detector searches
+offsets from -6 to +6 semitones and scores each against open-string guitar
+pitch classes. It works well when the recording has clear fundamental energy
+but can be misled by strong harmonics or non-guitar material. Manual
+override via `--tuning-offset` is recommended for known recordings.
+
+**Alternatives.** No tuning compensation (pitches systematically sharp or
+flat), per-note tuning estimation (too unstable), and key detection alone
+(cannot distinguish tuning offset from key change).
+
