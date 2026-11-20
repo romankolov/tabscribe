@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 
 use super::note::MidiNote;
 use crate::error::{Error, Result};
+#[allow(unused_imports)]
+use crate::music::Instrument;
 
 /// A zero-based index of a string within a [`Tuning`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

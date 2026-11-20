@@ -16,7 +16,8 @@ use midly::num::{u15, u24, u28, u4, u7};
 use midly::{Format, Header, MetaMessage, MidiMessage, Timing, TrackEvent, TrackEventKind};
 
 use crate::error::{Error, Result};
-use crate::music::{MidiNote, MidiTicks, Seconds, Tempo, TimeSignature};
+#[allow(unused_imports)]
+use crate::music::{MidiNote, MidiTicks, Seconds, Tempo, TempoMap, TimeSignature};
 use crate::transcription::NoteEvent;
 
 /// The tick resolution used in the files `tabscribe` writes.

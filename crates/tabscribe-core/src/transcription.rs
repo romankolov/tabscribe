@@ -14,8 +14,10 @@
 
 use serde::{Deserialize, Serialize};
 
+#[allow(unused_imports)]
 use crate::music::{
-    ChordEvent, Fret, Instrument, Key, MidiNote, Seconds, StringIdx, Tempo, TimeSignature,
+    Beats, ChordEvent, Fret, Instrument, Key, MidiNote, Seconds, StringIdx, Tempo, TempoMap,
+    TimeSignature,
 };
 
 /// A sounding note with its timing.
