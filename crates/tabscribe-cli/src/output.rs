@@ -34,6 +34,7 @@ pub fn print_warning(message: &str) {
     eprintln!("{} {message}", style("warning:").yellow());
 }
 
+#[allow(dead_code)]
 /// Print a success line.
 pub fn print_success(message: &str) {
     println!("{} {message}", style("done:").green().bold());

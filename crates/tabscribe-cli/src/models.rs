@@ -7,12 +7,8 @@ use tabscribe_models::{candidate_model_dirs, resolve, verify as verify_bytes, Mo
 
 /// The manifest compiled into the binary.
 pub fn builtin_manifest() -> ModelManifest {
-    match ModelManifest::from_json(tabscribe_models::BUILTIN_MANIFEST_JSON) {
-        Ok(manifest) => manifest,
-        // The manifest is a compile-time constant, so a parse failure is a
-        // build-time bug. Degrade to an empty registry rather than panicking.
-        Err(_) => ModelManifest::default(),
-    }
+    ModelManifest::from_json(tabscribe_models::BUILTIN_MANIFEST_JSON)
+        .unwrap_or_else(|_| ModelManifest::default())
 }
 
 /// The first model directory that exists, or the default location.
@@ -41,11 +37,11 @@ pub fn list(paths: bool) -> Result<()> {
         let status = if path.exists() { "present" } else { "missing" };
         println!("  {:<16} {}", entry.name, status);
         println!("  {:<16} {}", "", entry.description);
-        println!("  {:<16} {}", "", format!("license: {}", entry.license));
-        println!("  {:<16} {}", "", format!("source: {}", entry.source));
-        println!("  {:<16} {}", "", format!("sha256: {}", entry.sha256));
+        println!("  {:<16} {}", "", format_args!("license: {}", entry.license));
+        println!("  {:<16} {}", "", format_args!("source: {}", entry.source));
+        println!("  {:<16} {}", "", format_args!("sha256: {}", entry.sha256));
         if paths {
-            println!("  {:<16} {}", "", format!("path: {}", path.display()));
+            println!("  {:<16} {}", "", format_args!("path: {}", path.display()));
         }
         println!();
     }
@@ -88,7 +84,10 @@ pub fn verify(name: Option<&str>) -> Result<()> {
     }
 
     if name.is_some() && checked == 0 && failures == 0 {
-        println!("No model named '{}' is registered.", name.unwrap_or_default());
+        println!(
+            "No model named '{}' is registered.",
+            name.unwrap_or_default()
+        );
         return Ok(());
     }
 
@@ -108,8 +107,15 @@ pub fn print_manifest() -> Result<()> {
 /// `tabscribe doctor`
 pub fn doctor() -> Result<()> {
     println!("tabscribe {}", env!("CARGO_PKG_VERSION"));
-    println!("  os:   {} {}", std::env::consts::OS, std::env::consts::ARCH);
-    println!("  cwd:  {}", std::env::current_dir().unwrap_or_default().display());
+    println!(
+        "  os:   {} {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    println!(
+        "  cwd:  {}",
+        std::env::current_dir().unwrap_or_default().display()
+    );
     println!();
 
     let dir = model_dir();
@@ -142,6 +148,7 @@ pub fn doctor() -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 /// Resolve a model by name against the local model directory.
 pub fn resolve_model(name: &str) -> Result<(tabscribe_models::ModelEntry, PathBuf)> {
     let manifest = builtin_manifest();
@@ -152,6 +159,7 @@ pub fn resolve_model(name: &str) -> Result<(tabscribe_models::ModelEntry, PathBu
     Ok((resolved.entry, resolved.path))
 }
 
+#[allow(dead_code)]
 /// Check that `path` is a readable file.
 pub fn check_readable(path: &Path) -> Result<()> {
     std::fs::metadata(path).with_context(|| format!("could not stat {}", path.display()))?;

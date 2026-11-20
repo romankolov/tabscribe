@@ -8,7 +8,11 @@ use clap::{Parser, Subcommand};
 
 /// Command-line interface for the evaluation harness.
 #[derive(Debug, Parser)]
-#[command(name = "tabscribe-eval", version, about = "Evaluate tabscribe transcription quality")]
+#[command(
+    name = "tabscribe-eval",
+    version,
+    about = "Evaluate tabscribe transcription quality"
+)]
 struct Cli {
     /// The action to perform.
     #[command(subcommand)]

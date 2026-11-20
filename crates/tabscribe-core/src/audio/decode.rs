@@ -35,11 +35,7 @@ impl AudioBuffer {
     /// The number of frames (samples per channel).
     #[must_use]
     pub fn frames(&self) -> usize {
-        if self.channels == 0 {
-            0
-        } else {
-            self.samples.len() / self.channels
-        }
+        self.samples.len().checked_div(self.channels).unwrap_or(0)
     }
 
     /// The duration of the buffer.
@@ -141,7 +137,9 @@ pub fn decode_source(source: Box<dyn MediaSource>, extension: Option<&str>) -> R
             Err(e) => {
                 // A truncated file is still usable: keep what we decoded.
                 if buffer.samples.is_empty() {
-                    return Err(Error::Decode(format!("error reading the audio stream: {e}")));
+                    return Err(Error::Decode(format!(
+                        "error reading the audio stream: {e}"
+                    )));
                 }
                 tracing::warn!("stopped decoding early: {e}");
                 break;

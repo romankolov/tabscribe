@@ -37,9 +37,7 @@ impl TempoMap {
         changes.sort_by_key(|(tick, _)| *tick);
         changes.dedup_by_key(|(tick, _)| *tick);
         if changes.first().map(|(tick, _)| *tick) != Some(0) {
-            let initial = changes
-                .first()
-                .map_or(Tempo::DEFAULT, |(_, tempo)| *tempo);
+            let initial = changes.first().map_or(Tempo::DEFAULT, |(_, tempo)| *tempo);
             changes.insert(0, (0, initial));
         }
         TempoMap {
@@ -121,8 +119,7 @@ impl TempoMap {
         for (i, change) in self.changes.iter().enumerate() {
             let next_tick = self.changes.get(i + 1).map_or(u32::MAX, |n| n.tick);
             let segment_ticks = next_tick.saturating_sub(cursor);
-            let segment_seconds =
-                tick_seconds(segment_ticks, change.tempo, self.ticks_per_quarter);
+            let segment_seconds = tick_seconds(segment_ticks, change.tempo, self.ticks_per_quarter);
             if remaining < segment_seconds || next_tick == u32::MAX {
                 let fraction = if segment_seconds > 0.0 {
                     remaining / segment_seconds
@@ -198,7 +195,10 @@ mod tests {
         for beat in [0.0, 1.0, 2.5, 7.25] {
             let seconds = map.seconds_at_beat(beat);
             let back = map.beat_at_seconds(seconds);
-            assert!((back - beat).abs() < 0.02, "beat {beat} came back as {back}");
+            assert!(
+                (back - beat).abs() < 0.02,
+                "beat {beat} came back as {back}"
+            );
         }
     }
 }

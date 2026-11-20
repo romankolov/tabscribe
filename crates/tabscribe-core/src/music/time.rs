@@ -102,7 +102,9 @@ impl fmt::Display for Beats {
 }
 
 /// An absolute position in a MIDI file, measured in ticks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize,
+)]
 #[serde(transparent)]
 pub struct MidiTicks(pub u32);
 
@@ -218,7 +220,10 @@ pub struct TimeSignature {
 
 impl TimeSignature {
     /// Common time.
-    pub const COMMON: TimeSignature = TimeSignature { numerator: 4, denominator: 4 };
+    pub const COMMON: TimeSignature = TimeSignature {
+        numerator: 4,
+        denominator: 4,
+    };
 
     /// Construct a time signature.
     ///
@@ -237,7 +242,10 @@ impl TimeSignature {
                 "time signature denominator {denominator} must be a power of two"
             )));
         }
-        Ok(TimeSignature { numerator, denominator })
+        Ok(TimeSignature {
+            numerator,
+            denominator,
+        })
     }
 
     /// The number of quarter-note beats in one bar.
@@ -284,15 +292,19 @@ impl FromStr for TimeSignature {
 
     fn from_str(s: &str) -> Result<Self> {
         let trimmed = s.trim();
-        let (num, den) = trimmed.split_once('/').ok_or_else(|| Error::Config(format!(
-            "time signature '{trimmed}' must be written as N/D, for example 4/4"
-        )))?;
-        let numerator: u8 = num.trim().parse().map_err(|_| {
-            Error::Config(format!("invalid time signature numerator '{num}'"))
+        let (num, den) = trimmed.split_once('/').ok_or_else(|| {
+            Error::Config(format!(
+                "time signature '{trimmed}' must be written as N/D, for example 4/4"
+            ))
         })?;
-        let denominator: u8 = den.trim().parse().map_err(|_| {
-            Error::Config(format!("invalid time signature denominator '{den}'"))
-        })?;
+        let numerator: u8 = num
+            .trim()
+            .parse()
+            .map_err(|_| Error::Config(format!("invalid time signature numerator '{num}'")))?;
+        let denominator: u8 = den
+            .trim()
+            .parse()
+            .map_err(|_| Error::Config(format!("invalid time signature denominator '{den}'")))?;
         TimeSignature::new(numerator, denominator)
     }
 }
@@ -323,10 +335,7 @@ mod tests {
             "4/4".parse::<TimeSignature>().expect("valid"),
             TimeSignature::COMMON
         );
-        assert_eq!(
-            "6/8".parse::<TimeSignature>().expect("valid").numerator,
-            6
-        );
+        assert_eq!("6/8".parse::<TimeSignature>().expect("valid").numerator, 6);
         assert!("4".parse::<TimeSignature>().is_err());
         assert!("4/5".parse::<TimeSignature>().is_err());
         assert!("0/4".parse::<TimeSignature>().is_err());

@@ -227,7 +227,9 @@ mod tests {
     fn a_pure_tone_is_monophonic() {
         let sample_rate = 22_050;
         let signal: Vec<f32> = (0..sample_rate)
-            .map(|i| (2.0 * std::f64::consts::PI * 440.0 * i as f64 / sample_rate as f64).sin() as f32)
+            .map(|i| {
+                (2.0 * std::f64::consts::PI * 440.0 * i as f64 / sample_rate as f64).sin() as f32
+            })
             .collect();
         assert_eq!(estimate_material(&signal), Material::Monophonic);
     }

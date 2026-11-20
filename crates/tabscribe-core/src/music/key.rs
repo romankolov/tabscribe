@@ -39,7 +39,10 @@ pub struct Key {
 
 impl Key {
     /// The key of C major.
-    pub const C_MAJOR: Key = Key { tonic: PitchClass::C, mode: Mode::Major };
+    pub const C_MAJOR: Key = Key {
+        tonic: PitchClass::C,
+        mode: Mode::Major,
+    };
 
     /// Construct a key.
     #[must_use]
@@ -54,7 +57,10 @@ impl Key {
             Mode::Major => &[0, 2, 4, 5, 7, 9, 11],
             Mode::Minor => &[0, 2, 3, 5, 7, 8, 10],
         };
-        offsets.iter().map(|&o| self.tonic.transposed(o as i32)).collect()
+        offsets
+            .iter()
+            .map(|&o| self.tonic.transposed(o as i32))
+            .collect()
     }
 
     /// The number of sharps (positive) or flats (negative) in the key signature.

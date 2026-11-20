@@ -21,11 +21,11 @@ use crate::tab::cost::Style;
 use crate::technique::{self, PitchContour};
 use crate::transcribe::cleanup::{self, CleanupOptions};
 use crate::transcribe::dsp::{DspTranscriber, YinConfig};
-use crate::transcribe::poly::PolyphonicTranscriber;
-use crate::transcribe::AutoTranscriber;
 use crate::transcribe::harmony;
+use crate::transcribe::poly::PolyphonicTranscriber;
 use crate::transcribe::rhythm::{self, QuantizeMode, SpectrumConfig};
-use crate::transcribe::{Transcriber, TranscribeOptions};
+use crate::transcribe::AutoTranscriber;
+use crate::transcribe::{TranscribeOptions, Transcriber};
 use crate::transcription::{Measure, NoteEvent, Tab, TabNote, Transcription};
 
 /// The options of a full transcription run.
@@ -97,12 +97,11 @@ impl Clone for Pipeline {
         // The engine is not cloneable in general; the default engine is
         // recreated instead. A pipeline with a custom engine is cloned with
         // the same engine, which is safe because the engines are stateless.
-        let transcriber: Box<dyn Transcriber + Send + Sync> =
-            if self.transcriber.name() == "auto" {
-                Box::new(AutoTranscriber::new())
-            } else {
-                Box::new(DspTranscriber::new())
-            };
+        let transcriber: Box<dyn Transcriber + Send + Sync> = if self.transcriber.name() == "auto" {
+            Box::new(AutoTranscriber::new())
+        } else {
+            Box::new(DspTranscriber::new())
+        };
         Pipeline {
             transcriber,
             options: self.options.clone(),
@@ -186,7 +185,9 @@ impl Pipeline {
         }
 
         // ── 1. Pitch detection ────────────────────────────────────────────
-        let mut notes = self.transcriber.transcribe(signal, sample_rate, &self.options.detection)?;
+        let mut notes =
+            self.transcriber
+                .transcribe(signal, sample_rate, &self.options.detection)?;
 
         // ── 2. Rhythm ─────────────────────────────────────────────────────
         let spectrum = SpectrumConfig::for_sample_rate(sample_rate);
@@ -215,7 +216,13 @@ impl Pipeline {
         notes = rhythm::refine_boundaries(&notes, &envelope);
 
         // ── 4. Quantization ───────────────────────────────────────────────
-        notes = quantize_notes(&notes, &beats, tempo, self.options.quantize, self.options.quantize_grid);
+        notes = quantize_notes(
+            &notes,
+            &beats,
+            tempo,
+            self.options.quantize,
+            self.options.quantize_grid,
+        );
 
         // ── 5. Harmony ────────────────────────────────────────────────────
         let key = if self.options.detect_key {
@@ -248,7 +255,11 @@ impl Pipeline {
         // ── 7. Technique detection ─────────────────────────────────────────
         let contour = self.pitch_contour(signal, sample_rate);
         if self.options.detect_techniques {
-            let detected = technique::detect(&tab.notes, contour.as_ref(), self.options.technique_threshold);
+            let detected = technique::detect(
+                &tab.notes,
+                contour.as_ref(),
+                self.options.technique_threshold,
+            );
             for (note, detections) in tab.notes.iter_mut().zip(detected.iter()) {
                 for detection in detections {
                     if !note.techniques.contains(&detection.technique) {

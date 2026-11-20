@@ -69,7 +69,9 @@ impl fmt::Display for StringIdx {
 }
 
 /// A fret number, where 0 is an open string.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 #[serde(transparent)]
 pub struct Fret(u8);
 
@@ -452,11 +454,10 @@ pub fn parse_open_note(label: &str) -> Result<MidiNote> {
         input: label.to_string(),
         reason: format!("invalid octave '{octave_str}'"),
     })?;
-    let pitch_class: super::note::PitchClass =
-        name.parse().map_err(|_| Error::InvalidTuning {
-            input: label.to_string(),
-            reason: format!("invalid note name '{name}'"),
-        })?;
+    let pitch_class: super::note::PitchClass = name.parse().map_err(|_| Error::InvalidTuning {
+        input: label.to_string(),
+        reason: format!("invalid note name '{name}'"),
+    })?;
     MidiNote::from_pitch_class(pitch_class, octave)
 }
 
@@ -471,12 +472,16 @@ mod tests {
         assert_eq!(tuning.string_count(), 6);
         // String 1 is the high E.
         assert_eq!(
-            tuning.open_note(StringIdx::new(0).expect("valid")).expect("valid"),
+            tuning
+                .open_note(StringIdx::new(0).expect("valid"))
+                .expect("valid"),
             MidiNote::new(64).expect("valid")
         );
         // String 6 is the low E.
         assert_eq!(
-            tuning.open_note(StringIdx::new(5).expect("valid")).expect("valid"),
+            tuning
+                .open_note(StringIdx::new(5).expect("valid"))
+                .expect("valid"),
             MidiNote::new(40).expect("valid")
         );
         assert_eq!(tuning.lowest_open(), MidiNote::new(40).expect("valid"));
@@ -512,7 +517,9 @@ mod tests {
         let third = StringIdx::new(2).expect("valid");
         // String 3 of a standard guitar is G3 = MIDI 55, fret 3 = Bb3 = 58.
         assert_eq!(
-            tuning.pitch_at(third, Fret::new(3).expect("valid")).expect("valid"),
+            tuning
+                .pitch_at(third, Fret::new(3).expect("valid"))
+                .expect("valid"),
             MidiNote::new(58).expect("valid")
         );
     }

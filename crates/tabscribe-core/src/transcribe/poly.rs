@@ -30,7 +30,7 @@ use rustfft::FftPlanner;
 
 use crate::error::{Error, Result};
 use crate::music::{MidiNote, Seconds};
-use crate::transcribe::{Transcriber, TranscribeOptions};
+use crate::transcribe::{TranscribeOptions, Transcriber};
 use crate::transcription::NoteEvent;
 
 /// The configuration of the polyphonic detector.
@@ -198,7 +198,9 @@ pub struct PolyTranscriber {
 
 impl Default for PolyTranscriber {
     fn default() -> Self {
-        PolyTranscriber { seed: 0x5EED_1234_ABCD_0002 }
+        PolyTranscriber {
+            seed: 0x5EED_1234_ABCD_0002,
+        }
     }
 }
 
@@ -250,7 +252,10 @@ impl PolyTranscriber {
             let energy = frame_energy(frame);
             if energy <= gate {
                 // A silent frame: it interrupts any note that is sounding.
-                frames.push(PolyFrame { time, pitches: Vec::new() });
+                frames.push(PolyFrame {
+                    time,
+                    pitches: Vec::new(),
+                });
                 start += config.hop_size;
                 continue;
             }
@@ -353,7 +358,7 @@ fn detect_pitches(
             }
             let ratio = peak.frequency / other.frequency;
             let harmonic = ratio.round();
-            if harmonic >= 2.0 && harmonic <= 8.0 && (ratio - harmonic).abs() < 0.06 {
+            if (2.0..=8.0).contains(&harmonic) && (ratio - harmonic).abs() < 0.06 {
                 // The lower peak explains this one better.
                 is_harmonic = true;
                 break;
@@ -412,7 +417,9 @@ fn detect_pitches(
             let other = ordered[other_index];
             let ratio = other.frequency / peak.frequency;
             let harmonic = ratio.round();
-            if harmonic >= 1.0 && harmonic <= config.harmonics as f64 && (ratio - harmonic).abs() < 0.08
+            if harmonic >= 1.0
+                && harmonic <= config.harmonics as f64
+                && (ratio - harmonic).abs() < 0.08
             {
                 explained[other_index] = true;
             }
@@ -435,7 +442,7 @@ fn detect_pitches(
         }
     }
 
-    accepted.sort_by(|a, b| a.pitch.as_u8().cmp(&b.pitch.as_u8()));
+    accepted.sort_by_key(|a| a.pitch.as_u8());
     let _ = bin_hz;
     accepted
 }
@@ -478,7 +485,11 @@ impl Transcriber for PolyphonicTranscriber {
         }
 
         let frame_duration = config.hop_size as f64 / config.sample_rate as f64;
-        Ok(notes_from_frames(&frames, frame_duration, options.min_note_seconds))
+        Ok(notes_from_frames(
+            &frames,
+            frame_duration,
+            options.min_note_seconds,
+        ))
     }
 }
 

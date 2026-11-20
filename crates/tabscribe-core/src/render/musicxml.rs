@@ -138,7 +138,11 @@ pub fn render(tab: &Tab, options: &MusicXmlOptions) -> String {
 
     write(
         &mut writer,
-        Event::Decl(quick_xml::events::BytesDecl::new("1.0", Some("UTF-8"), None)),
+        Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0",
+            Some("UTF-8"),
+            None,
+        )),
     );
 
     let mut score = BytesStart::new("score-partwise");
@@ -161,7 +165,7 @@ pub fn render(tab: &Tab, options: &MusicXmlOptions) -> String {
         write(&mut writer, Event::Text(BytesText::new(&options.composer)));
         write(&mut writer, Event::End(BytesEnd::new("creator")));
     }
-    let mut encoding = BytesStart::new("encoding");
+    let encoding = BytesStart::new("encoding");
     write(&mut writer, Event::Start(encoding));
     write_text(
         &mut writer,
@@ -172,7 +176,7 @@ pub fn render(tab: &Tab, options: &MusicXmlOptions) -> String {
     write(&mut writer, Event::End(BytesEnd::new("identification")));
 
     // ── Part list ─────────────────────────────────────────────────────────
-    let mut part_list = BytesStart::new("part-list");
+    let part_list = BytesStart::new("part-list");
     write(&mut writer, Event::Start(part_list));
     let mut score_part = BytesStart::new("score-part");
     score_part.push_attribute(("id", "P1"));
@@ -214,7 +218,10 @@ fn write_text(writer: &mut Writer<Vec<u8>>, name: &str, content: &str) {
     if writer.write_event(Event::Start(start)).is_err() {
         return;
     }
-    if writer.write_event(Event::Text(BytesText::new(content))).is_err() {
+    if writer
+        .write_event(Event::Text(BytesText::new(content)))
+        .is_err()
+    {
         return;
     }
     let _ = writer.write_event(Event::End(BytesEnd::new(name)));
@@ -365,12 +372,7 @@ fn build_measures(tab: &Tab) -> Vec<BuiltMeasure> {
                 a.start
                     .partial_cmp(&b.start)
                     .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| {
-                        a.note
-                            .pitch
-                            .as_u8()
-                            .cmp(&b.note.pitch.as_u8())
-                    })
+                    .then_with(|| a.note.pitch.as_u8().cmp(&b.note.pitch.as_u8()))
             });
 
             BuiltMeasure {
@@ -438,7 +440,7 @@ fn write_measure(
 
     // The attributes of the piece belong to the first measure.
     if index == 0 {
-        let mut attributes = BytesStart::new("attributes");
+        let attributes = BytesStart::new("attributes");
         if writer.write_event(Event::Start(attributes)).is_err() {
             return;
         }
@@ -496,7 +498,7 @@ fn write_harmony(writer: &mut Writer<Vec<u8>>, measure: &BuiltMeasure, tab: &Tab
             return;
         }
 
-        let mut root = BytesStart::new("root");
+        let root = BytesStart::new("root");
         let (step, alter) = chord_step(chord.chord.root.as_u8());
         if writer.write_event(Event::Start(root)).is_err() {
             return;
@@ -587,7 +589,7 @@ fn write_staff(
 
 /// Write a backup that returns the cursor to the start of the measure.
 fn write_backup(writer: &mut Writer<Vec<u8>>, duration: u32) {
-    let mut start = BytesStart::new("backup");
+    let start = BytesStart::new("backup");
     if writer.write_event(Event::Start(start)).is_err() {
         return;
     }
@@ -644,7 +646,7 @@ fn write_note(
     let (step, alter) = pitch_step(pitch);
     let octave = octave_of(pitch);
 
-    let mut pitch_element = BytesStart::new("pitch");
+    let pitch_element = BytesStart::new("pitch");
     if writer.write_event(Event::Start(pitch_element)).is_err() {
         return;
     }
@@ -682,7 +684,7 @@ fn write_note(
     }
 
     if placed.tie_stop || placed.tie_start {
-        let mut notations = BytesStart::new("notations");
+        let notations = BytesStart::new("notations");
         if writer.write_event(Event::Start(notations)).is_err() {
             return;
         }
@@ -730,7 +732,7 @@ fn write_tab_note(
     let (step, alter) = pitch_step(pitch);
     let octave = octave_of(pitch);
 
-    let mut pitch_element = BytesStart::new("pitch");
+    let pitch_element = BytesStart::new("pitch");
     if writer.write_event(Event::Start(pitch_element)).is_err() {
         return;
     }
@@ -762,7 +764,7 @@ fn write_tab_note(
         write_text(writer, "staff", &staff.to_string());
     }
 
-    let mut notations = BytesStart::new("notations");
+    let notations = BytesStart::new("notations");
     if writer.write_event(Event::Start(notations)).is_err() {
         return;
     }
@@ -780,7 +782,7 @@ fn write_tab_note(
     // the same order as the internal numbering.
     let string_number = (placed.note.string.as_u8() as usize + 1).clamp(1, 255);
 
-    let mut technical = BytesStart::new("technical");
+    let technical = BytesStart::new("technical");
     if writer.write_event(Event::Start(technical)).is_err() {
         return;
     }

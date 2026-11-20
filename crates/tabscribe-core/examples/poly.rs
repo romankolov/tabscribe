@@ -7,7 +7,7 @@ fn tone(freq: f64, n: usize, sr: u32, amp: f32) -> Vec<f32> {
     (0..n)
         .map(|i| {
             let t = i as f64 / sr as f64;
-            let env = (-t * 2.2).exp() as f64;
+            let env = (-t * 2.2).exp();
             let v: f64 = (1..=6)
                 .map(|h| (2.0 * std::f64::consts::PI * freq * h as f64 * t).sin() / h as f64)
                 .sum();

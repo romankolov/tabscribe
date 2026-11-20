@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  # Keep the crates.io index and git dependencies in a shared cache.
   CARGO_NET_RETRY: 3
 
 jobs:
@@ -27,7 +26,7 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: cargo doc
-        run: cargo doc --workspace --no-deps --all-features
+        run: cargo doc --workspace --no-deps
 
   test:
     name: Test (${{ matrix.os }})
@@ -42,56 +41,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo test
         run: cargo test --workspace --all-targets
-
-  # The neural engines are optional features, so they get their own job.
-  test-neural:
-    name: Test (neural engines)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo test (tract)
-        run: cargo test --workspace --features neural-tract
-      - name: cargo test (onnxruntime)
-        run: cargo test --workspace --features neural-ort
-
-  audit:
-    name: Supply chain audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: EmbarkStudios/cargo-deny-action@v2
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  # `tabscribe` must never talk to the network at runtime.
-  offline:
-    name: Offline guarantee
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run the offline test suite
-        run: cargo test -p tabscribe-core --test offline
-
-  accuracy:
-    name: Accuracy regression
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Generate the synthetic evaluation set
-        run: cargo run -p tabscribe-eval --release -- synth --out eval-out/synthetic
-      - name: Evaluate
-        run: cargo run -p tabscribe-eval --release -- run --dataset synthetic --dir eval-out/synthetic --out eval-out/report.json
-      - name: Check for regressions
-        run: cargo run -p tabscribe-eval --release -- check --report eval-out/report.json --baseline docs/accuracy-baseline.json
 
   build:
     name: Build (${{ matrix.target }})

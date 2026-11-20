@@ -43,7 +43,12 @@ impl Group {
     /// Construct a group of simultaneously sounding pitches.
     #[must_use]
     pub fn new(pitches: Vec<MidiNote>, start: Seconds) -> Self {
-        Group { pitches, start, legato: false, chord: None }
+        Group {
+            pitches,
+            start,
+            legato: false,
+            chord: None,
+        }
     }
 
     /// Mark the group as legato from the previous one.
@@ -182,7 +187,7 @@ impl<'a> TabOptimizer<'a> {
 
         // Backward pass: the cheapest cost of leaving every state.
         for g in (0..n_groups).rev() {
-            let chord = groups[g].chord.as_ref();
+            let _chord = groups[g].chord.as_ref();
             let group_states = &states[g];
             let mut costs = vec![f64::INFINITY; group_states.len()];
             for (s, state) in group_states.iter().enumerate() {
@@ -199,8 +204,7 @@ impl<'a> TabOptimizer<'a> {
                     if !next_cost.is_finite() {
                         continue;
                     }
-                    let transition =
-                        self.transition_cost(state, next, groups[g + 1].legato);
+                    let transition = self.transition_cost(state, next, groups[g + 1].legato);
                     let local_next = self.local_cost(next, next_chord);
                     best = best.min(transition + local_next + next_cost);
                 }
@@ -242,7 +246,11 @@ impl<'a> TabOptimizer<'a> {
             alternatives.push(alts.into_iter().map(|(_, state)| state).collect());
         }
 
-        Ok(Assignment { fingerings, cost: total_cost, alternatives })
+        Ok(Assignment {
+            fingerings,
+            cost: total_cost,
+            alternatives,
+        })
     }
 
     /// The notes of a group that can be played together.
@@ -488,12 +496,7 @@ pub fn default_max_span(instrument: &Instrument) -> u8 {
 /// Notes are paired optimally (a minimum-cost bipartite matching, solved with
 /// a subset dynamic program), and notes without a counterpart are charged an
 /// `unmatched_voice` penalty because the picking hand has to move anyway.
-fn match_cost(
-    prev: &[Position],
-    next: &[Position],
-    weights: &CostWeights,
-    legato: bool,
-) -> f64 {
+fn match_cost(prev: &[Position], next: &[Position], weights: &CostWeights, legato: bool) -> f64 {
     if prev.is_empty() || next.is_empty() {
         return 0.0;
     }

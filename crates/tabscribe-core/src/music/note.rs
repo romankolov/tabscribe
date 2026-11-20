@@ -409,7 +409,13 @@ pub struct SpelledNote {
 
 impl fmt::Display for SpelledNote {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", self.pitch_class.base_letter(), self.accidental, self.octave)
+        write!(
+            f,
+            "{}{}{}",
+            self.pitch_class.base_letter(),
+            self.accidental,
+            self.octave
+        )
     }
 }
 

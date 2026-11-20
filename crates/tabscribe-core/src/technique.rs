@@ -236,12 +236,11 @@ fn detect_vibrato(frames: &[&ContourFrame]) -> Option<DetectedTechnique> {
     let mut crossings: Vec<f64> = Vec::new();
     for index in 1..deviations.len() {
         if (deviations[index - 1] < 0.0) != (deviations[index] < 0.0) {
-            let before = f64::from(frames[index - 1].time);
-            let after = f64::from(frames[index].time);
+            let before = frames[index - 1].time;
+            let after = frames[index].time;
             let span = (after - before).max(1e-9);
-            let ratio = f64::from(
-                deviations[index - 1] / (deviations[index - 1] - deviations[index]),
-            );
+            let ratio =
+                f64::from(deviations[index - 1] / (deviations[index - 1] - deviations[index]));
             crossings.push(before + ratio * span);
         }
     }
@@ -302,10 +301,7 @@ mod tests {
 
     #[test]
     fn a_legato_rise_is_a_hammer_on() {
-        let notes = vec![
-            tab_note(60, 0, 0.0, 0.5),
-            tab_note(62, 0, 0.5, 1.0),
-        ];
+        let notes = vec![tab_note(60, 0, 0.0, 0.5), tab_note(62, 0, 0.5, 1.0)];
         let detected = detect(&notes, None, DEFAULT_THRESHOLD);
         assert_eq!(detected[1].len(), 1);
         assert_eq!(detected[1][0].technique, Technique::HammerOn);
@@ -313,30 +309,21 @@ mod tests {
 
     #[test]
     fn a_legato_fall_is_a_pull_off() {
-        let notes = vec![
-            tab_note(62, 0, 0.0, 0.5),
-            tab_note(60, 0, 0.5, 1.0),
-        ];
+        let notes = vec![tab_note(62, 0, 0.0, 0.5), tab_note(60, 0, 0.5, 1.0)];
         let detected = detect(&notes, None, DEFAULT_THRESHOLD);
         assert_eq!(detected[1][0].technique, Technique::PullOff);
     }
 
     #[test]
     fn a_re_articulated_note_is_not_legato() {
-        let notes = vec![
-            tab_note(60, 0, 0.0, 0.4),
-            tab_note(62, 0, 0.6, 1.0),
-        ];
+        let notes = vec![tab_note(60, 0, 0.0, 0.4), tab_note(62, 0, 0.6, 1.0)];
         let detected = detect(&notes, None, DEFAULT_THRESHOLD);
         assert!(detected[1].is_empty());
     }
 
     #[test]
     fn a_note_on_another_string_is_not_legato() {
-        let notes = vec![
-            tab_note(60, 0, 0.0, 0.5),
-            tab_note(62, 1, 0.5, 1.0),
-        ];
+        let notes = vec![tab_note(60, 0, 0.0, 0.5), tab_note(62, 1, 0.5, 1.0)];
         let detected = detect(&notes, None, DEFAULT_THRESHOLD);
         assert!(detected[1].is_empty());
     }
@@ -346,7 +333,8 @@ mod tests {
         let mut frames = Vec::new();
         for index in 0..40 {
             let time = index as f64 * 0.01;
-            let frequency = 440.0 * 2f64.powf(0.35 * (2.0 * std::f64::consts::PI * 6.0 * time).sin() / 12.0);
+            let frequency =
+                440.0 * 2f64.powf(0.35 * (2.0 * std::f64::consts::PI * 6.0 * time).sin() / 12.0);
             frames.push(ContourFrame {
                 time,
                 frequency,

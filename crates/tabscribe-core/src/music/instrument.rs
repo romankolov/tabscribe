@@ -125,7 +125,12 @@ impl Instrument {
                 "the instrument must have at least one fret".to_string(),
             ));
         }
-        Ok(Instrument { kind, tuning, capo, max_fret })
+        Ok(Instrument {
+            kind,
+            tuning,
+            capo,
+            max_fret,
+        })
     }
 
     /// The default instrument for a given kind.
@@ -214,9 +219,8 @@ impl Instrument {
     #[must_use]
     pub fn range(&self) -> (MidiNote, MidiNote) {
         let lowest = self.tuning.lowest_open().as_u8() as i32 + self.capo as i32;
-        let highest = self.tuning.highest_open().as_u8() as i32
-            + self.capo as i32
-            + self.max_fret as i32;
+        let highest =
+            self.tuning.highest_open().as_u8() as i32 + self.capo as i32 + self.max_fret as i32;
         (
             MidiNote::clamped(lowest.max(0) as u16),
             MidiNote::clamped(highest.min(127) as u16),
@@ -327,10 +331,22 @@ mod tests {
         let positions = instrument.positions_for(MidiNote::new(64).expect("valid"));
         assert_eq!(positions.len(), 5);
         assert!(positions.contains(&(StringIdx::new(0).expect("valid"), Fret::OPEN)));
-        assert!(positions.contains(&(StringIdx::new(1).expect("valid"), Fret::new(5).expect("valid"))));
-        assert!(positions.contains(&(StringIdx::new(2).expect("valid"), Fret::new(9).expect("valid"))));
-        assert!(positions.contains(&(StringIdx::new(3).expect("valid"), Fret::new(14).expect("valid"))));
-        assert!(positions.contains(&(StringIdx::new(4).expect("valid"), Fret::new(19).expect("valid"))));
+        assert!(positions.contains(&(
+            StringIdx::new(1).expect("valid"),
+            Fret::new(5).expect("valid")
+        )));
+        assert!(positions.contains(&(
+            StringIdx::new(2).expect("valid"),
+            Fret::new(9).expect("valid")
+        )));
+        assert!(positions.contains(&(
+            StringIdx::new(3).expect("valid"),
+            Fret::new(14).expect("valid")
+        )));
+        assert!(positions.contains(&(
+            StringIdx::new(4).expect("valid"),
+            Fret::new(19).expect("valid")
+        )));
     }
 
     #[test]
@@ -356,6 +372,8 @@ mod tests {
     #[test]
     fn out_of_range_pitches_have_no_positions() {
         let instrument = Instrument::for_kind(InstrumentKind::Guitar).expect("valid");
-        assert!(instrument.positions_for(MidiNote::new(0).expect("valid")).is_empty());
+        assert!(instrument
+            .positions_for(MidiNote::new(0).expect("valid"))
+            .is_empty());
     }
 }

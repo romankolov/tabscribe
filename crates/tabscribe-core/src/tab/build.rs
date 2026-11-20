@@ -130,11 +130,10 @@ impl<'a> TabBuilder<'a> {
             let group = &groups[*index];
             let pitches: Vec<MidiNote> = keep.iter().map(|&i| group.pitches[i]).collect();
             let chord = chord_at(&transcription.chords, group.start);
-            let legato = position > 0
-                && {
-                    let previous = &groups[playable[position - 1].0];
-                    previous.end >= group.start.as_secs() - 1e-6
-                };
+            let legato = position > 0 && {
+                let previous = &groups[playable[position - 1].0];
+                previous.end >= group.start.as_secs() - 1e-6
+            };
             labelled_groups.push(
                 Group::new(pitches, group.start)
                     .legato(legato)
@@ -311,14 +310,25 @@ fn limited_instrument(instrument: &Instrument, max_fret: u8) -> Result<Instrumen
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::music::InstrumentKind;
 
     #[test]
     fn notes_with_the_same_onset_are_grouped() {
         let notes = vec![
-            NoteEvent::new(MidiNote::new(64).expect("valid"), Seconds::from_secs(0.0), Seconds::from_secs(1.0)),
-            NoteEvent::new(MidiNote::new(60).expect("valid"), Seconds::from_secs(0.005), Seconds::from_secs(1.0)),
-            NoteEvent::new(MidiNote::new(67).expect("valid"), Seconds::from_secs(0.5), Seconds::from_secs(1.0)),
+            NoteEvent::new(
+                MidiNote::new(64).expect("valid"),
+                Seconds::from_secs(0.0),
+                Seconds::from_secs(1.0),
+            ),
+            NoteEvent::new(
+                MidiNote::new(60).expect("valid"),
+                Seconds::from_secs(0.005),
+                Seconds::from_secs(1.0),
+            ),
+            NoteEvent::new(
+                MidiNote::new(67).expect("valid"),
+                Seconds::from_secs(0.5),
+                Seconds::from_secs(1.0),
+            ),
         ];
         let groups = group_notes(&notes);
         assert_eq!(groups.len(), 2);

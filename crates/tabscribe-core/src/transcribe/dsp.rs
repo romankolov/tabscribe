@@ -31,11 +31,8 @@ use rustfft::FftPlanner;
 
 use crate::error::{Error, Result};
 use crate::music::{MidiNote, Seconds};
-use crate::transcribe::{Transcriber, TranscribeOptions};
+use crate::transcribe::{TranscribeOptions, Transcriber};
 use crate::transcription::NoteEvent;
-
-/// The number of frequency bins used by the spectral analysis.
-const SPECTRUM_SIZE: usize = 2048;
 
 /// The configuration of the YIN analysis.
 #[derive(Debug, Clone)]
@@ -406,7 +403,7 @@ fn magnitude_spectrum(
     let bins = buffer.len() / 2 + 1;
     buffer[..bins]
         .iter()
-        .map(|value| value.norm() as f32)
+        .map(|value| value.norm())
         .collect()
 }
 
@@ -529,12 +526,7 @@ pub fn analyze_frames(signal: &[f32], config: &YinConfig) -> FrameAnalysis {
 /// that is being played, even when the difference function likes its period.
 /// This is what tells a fundamental apart from the harmonic of another note,
 /// and it is the cure for the octave errors of the difference function.
-fn weigh_by_salience(
-    posterior: &mut Posterior,
-    spectrum: &[f32],
-    bin_hz: f64,
-    config: &YinConfig,
-) {
+fn weigh_by_salience(posterior: &mut Posterior, spectrum: &[f32], bin_hz: f64, config: &YinConfig) {
     let mut saliences: Vec<f64> = Vec::with_capacity(posterior.candidates.len());
     for candidate in &posterior.candidates {
         let refined = parabolic_refine(candidate);
@@ -543,7 +535,12 @@ fn weigh_by_salience(
             continue;
         }
         let frequency = config.sample_rate as f64 / refined;
-        saliences.push(harmonic_salience(spectrum, bin_hz, frequency, SALIENCE_HARMONICS));
+        saliences.push(harmonic_salience(
+            spectrum,
+            bin_hz,
+            frequency,
+            SALIENCE_HARMONICS,
+        ));
     }
 
     let strongest = saliences.iter().copied().fold(0.0f64, f64::max);
@@ -663,9 +660,9 @@ struct Segmenter {
     /// The transition cost between two states.
     transition: Vec<Vec<f64>>,
     /// The cost of entering a state from the rest state.
-    onset_cost: f64,
+    _onset_cost: f64,
     /// The cost of leaving a state for the rest state.
-    offset_cost: f64,
+    _offset_cost: f64,
 }
 
 impl Segmenter {
@@ -697,8 +694,8 @@ impl Segmenter {
         Segmenter {
             states,
             transition,
-            onset_cost: 1.0,
-            offset_cost: 1.0,
+            _onset_cost: 1.0,
+            _offset_cost: 1.0,
         }
     }
 
@@ -713,7 +710,7 @@ impl Segmenter {
         let mut costs = vec![vec![0.0f64; n]; frames.len()];
         let mut backpointers = vec![vec![0usize; n]; frames.len()];
 
-        for (index, frame) in frames.iter().enumerate() {
+        for (index, _frame) in frames.iter().enumerate() {
             for (state_index, state) in self.states.iter().enumerate() {
                 let emission = match state {
                     State::Rest => pitch_costs[index][0],
@@ -767,7 +764,9 @@ pub struct DspTranscriber {
 
 impl Default for DspTranscriber {
     fn default() -> Self {
-        DspTranscriber { seed: 0x5EED_1234_ABCD_0001 }
+        DspTranscriber {
+            seed: 0x5EED_1234_ABCD_0001,
+        }
     }
 }
 
@@ -811,7 +810,7 @@ impl Transcriber for DspTranscriber {
             .frames
             .iter()
             .map(|frame| {
-                let confidence = f64::from(frame.probability).clamp(0.0, 1.0);
+                let confidence = frame.probability.clamp(0.0, 1.0);
                 pitch_distribution(&frame.posterior, &config, low, high, confidence)
             })
             .collect();
@@ -882,7 +881,7 @@ impl Transcriber for DspTranscriber {
 ///
 /// A median filter over the log-frequency removes the isolated octave errors
 /// that survive the YIN threshold, without blurring real melodic movement.
-fn smooth_frequencies(frames: &[Frame], config: &YinConfig) -> Vec<Frame> {
+fn _smooth_frequencies(frames: &[Frame], config: &YinConfig) -> Vec<Frame> {
     const MEDIAN: usize = 3;
     let mut smoothed: Vec<Frame> = frames.to_vec();
     let voiced: Vec<bool> = frames
@@ -924,7 +923,8 @@ mod tests {
         let n = (sample_rate as f64 * seconds) as usize;
         (0..n)
             .map(|i| {
-                (2.0 * std::f64::consts::PI * frequency * i as f64 / sample_rate as f64).sin() as f32
+                (2.0 * std::f64::consts::PI * frequency * i as f64 / sample_rate as f64).sin()
+                    as f32
             })
             .collect()
     }

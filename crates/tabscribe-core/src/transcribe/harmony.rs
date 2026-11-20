@@ -225,12 +225,7 @@ pub fn chroma_track(signal: &[f32], sample_rate: u32) -> ChromaTrack {
 ///
 /// A small neighbourhood is removed because the Hann window spreads the
 /// energy of a partial over a few bins.
-fn remove_around(
-    magnitudes: &mut [f64],
-    frequency: f64,
-    sample_rate: u32,
-    window_size: usize,
-) {
+fn remove_around(magnitudes: &mut [f64], frequency: f64, sample_rate: u32, window_size: usize) {
     let bin = frequency * window_size as f64 / sample_rate as f64;
     let centre = bin.round() as usize;
     if centre >= magnitudes.len() {
@@ -247,12 +242,7 @@ fn remove_around(
 ///
 /// The value is the maximum of the bins around the frequency, which is
 /// enough resolution for the coarse frequency grid of the salience.
-fn magnitude_at(
-    magnitudes: &[f64],
-    frequency: f64,
-    sample_rate: u32,
-    window_size: usize,
-) -> f64 {
+fn magnitude_at(magnitudes: &[f64], frequency: f64, sample_rate: u32, window_size: usize) -> f64 {
     let bin = frequency * window_size as f64 / sample_rate as f64;
     let centre = bin.round() as usize;
     if centre >= magnitudes.len() {
@@ -260,7 +250,10 @@ fn magnitude_at(
     }
     let low = centre.saturating_sub(1);
     let high = (centre + 1).min(magnitudes.len() - 1);
-    magnitudes[low..=high].iter().copied().fold(0.0f64, f64::max)
+    magnitudes[low..=high]
+        .iter()
+        .copied()
+        .fold(0.0f64, f64::max)
 }
 
 /// Compute the average chroma of a signal.
@@ -304,7 +297,7 @@ pub fn key_profiles() -> Vec<[f64; 12]> {
     for tonic in 0u8..12 {
         let mut profile = [0.0f64; 12];
         for (offset, weight) in MAJOR_WEIGHTS.iter().enumerate() {
-            profile[((tonic as usize + offset) % 12)] = *weight;
+            profile[(tonic as usize + offset) % 12] = *weight;
         }
         profiles.push(profile);
     }
@@ -382,9 +375,9 @@ pub fn key_transitions() -> Vec<[f64; KEY_COUNT]> {
                 row[key] += RELATED;
             }
         }
-        for key in 0..KEY_COUNT {
-            if row[key] == 0.0 {
-                row[key] = OTHER;
+        for value in row.iter_mut() {
+            if *value == 0.0 {
+                *value = OTHER;
             }
         }
         matrix[from] = row;
@@ -404,7 +397,11 @@ pub struct KeyEstimate {
 /// The key of a slot in the key list.
 fn key_at(index: usize) -> Key {
     let tonic = PitchClass::new((index % 12) as u8).unwrap_or(PitchClass::C);
-    let mode = if index >= 12 { Mode::Minor } else { Mode::Major };
+    let mode = if index >= 12 {
+        Mode::Minor
+    } else {
+        Mode::Major
+    };
     Key::new(tonic, mode)
 }
 
@@ -661,7 +658,10 @@ pub fn recognise_chords(
 #[must_use]
 pub fn meter_from_beats(beat_count: usize) -> TimeSignature {
     match beat_count % 4 {
-        3 => TimeSignature { numerator: 4, denominator: 4 },
+        3 => TimeSignature {
+            numerator: 4,
+            denominator: 4,
+        },
         _ => TimeSignature::COMMON,
     }
 }
@@ -672,7 +672,7 @@ mod tests {
     use super::*;
 
     /// A chroma with all the energy on one pitch class.
-    fn chroma_with(pitch_class: u8) -> Chroma {
+    fn _chroma_with(pitch_class: u8) -> Chroma {
         let mut chroma = [0.0f64; 12];
         chroma[pitch_class as usize] = 1.0;
         chroma

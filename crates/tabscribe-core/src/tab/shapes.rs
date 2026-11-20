@@ -126,16 +126,13 @@ fn voicing(instrument: &Instrument, chord: &Chord, shift: i32) -> Option<Vec<Mid
 }
 
 /// Whether the lowest sounding note of a fingering is the chord root.
-fn is_root_position(
-    instrument: &Instrument,
-    pitches: &[MidiNote],
-    positions: &[Position],
-) -> bool {
+fn is_root_position(instrument: &Instrument, pitches: &[MidiNote], positions: &[Position]) -> bool {
     let mut lowest: Option<(u8, u8)> = None;
     for (pitch, position) in pitches.iter().zip(positions.iter()) {
         let sounding = instrument
             .sounding_note(
-                crate::music::StringIdx::new(position.string).unwrap_or(crate::music::StringIdx::LOWEST),
+                crate::music::StringIdx::new(position.string)
+                    .unwrap_or(crate::music::StringIdx::LOWEST),
                 crate::music::Fret::new(position.fret).unwrap_or(crate::music::Fret::OPEN),
             )
             .map(|n| n.as_u8())
@@ -170,7 +167,11 @@ mod tests {
     fn dictionary_is_built_for_standard_guitar() {
         let instrument = Instrument::for_kind(InstrumentKind::Guitar).expect("valid");
         let dictionary = ShapeDictionary::build(&instrument, &CostWeights::default());
-        assert!(dictionary.len() >= 30, "expected many chords, got {}", dictionary.len());
+        assert!(
+            dictionary.len() >= 30,
+            "expected many chords, got {}",
+            dictionary.len()
+        );
         let c_major = Chord::new(PitchClass::C, ChordKind::Major);
         assert!(dictionary.get(&c_major).is_some());
     }
@@ -180,7 +181,12 @@ mod tests {
         let instrument = Instrument::for_kind(InstrumentKind::Guitar).expect("valid");
         let dictionary = ShapeDictionary::build(&instrument, &CostWeights::default());
         let c_major = Chord::new(PitchClass::C, ChordKind::Major);
-        let shape = dictionary.get(&c_major).expect("known chord").first().cloned().expect("shape");
+        let shape = dictionary
+            .get(&c_major)
+            .expect("known chord")
+            .first()
+            .cloned()
+            .expect("shape");
         let mut shuffled = shape.clone();
         shuffled.reverse();
         assert!(dictionary.matches(&c_major, &shuffled));

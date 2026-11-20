@@ -103,7 +103,10 @@ pub enum Error {
 impl Error {
     /// Attach a path to an [`std::io::Error`], preserving the original as source.
     pub fn io(path: impl Into<String>, source: std::io::Error) -> Self {
-        Error::Io { path: path.into(), source }
+        Error::Io {
+            path: path.into(),
+            source,
+        }
     }
 
     /// Short, stable, machine-readable identifier for this error variant.
@@ -134,9 +137,7 @@ impl Error {
     /// Returns `None` when no specific remediation exists.
     pub fn remedy(&self) -> Option<String> {
         Some(match self {
-            Error::Io { .. } => {
-                "check that the path exists and is readable".to_string()
-            }
+            Error::Io { .. } => "check that the path exists and is readable".to_string(),
             Error::Decode(_) => {
                 "the file may be corrupt or use an unsupported codec; try converting it to WAV \
                  (e.g. `ffmpeg -i input.mp3 -ar 44100 -ac 1 input.wav`)"
@@ -165,8 +166,12 @@ impl Error {
                  SHA-256"
                     .to_string()
             }
-            Error::Model { .. } => "run `tabscribe models list` to see available models".to_string(),
-            Error::Inference(_) => "try `--engine dsp` to fall back to the classical engine".to_string(),
+            Error::Model { .. } => {
+                "run `tabscribe models list` to see available models".to_string()
+            }
+            Error::Inference(_) => {
+                "try `--engine dsp` to fall back to the classical engine".to_string()
+            }
             Error::FeatureDisabled { feature } => {
                 format!("rebuild with `--features {feature}`")
             }

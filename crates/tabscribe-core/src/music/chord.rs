@@ -108,9 +108,7 @@ impl ChordKind {
             | ChordKind::MinorMajorSeventh
             | ChordKind::Diminished
             | ChordKind::DiminishedSeventh => Some(false),
-            ChordKind::SuspendedSecond
-            | ChordKind::SuspendedFourth
-            | ChordKind::Power => None,
+            ChordKind::SuspendedSecond | ChordKind::SuspendedFourth | ChordKind::Power => None,
         }
     }
 }
@@ -130,7 +128,11 @@ impl Chord {
     /// Construct a chord in root position.
     #[must_use]
     pub const fn new(root: PitchClass, kind: ChordKind) -> Self {
-        Chord { root, kind, inversion: 0 }
+        Chord {
+            root,
+            kind,
+            inversion: 0,
+        }
     }
 
     /// The pitch classes contained in this chord.
@@ -166,20 +168,19 @@ impl FromStr for Chord {
             return Err(Error::Config("empty chord name".to_string()));
         }
         let mut root_text = String::new();
-        let mut idx = 0;
+        let mut idx = 1;
         let chars: Vec<char> = trimmed.chars().collect();
         if chars.is_empty() {
             return Err(Error::Config("empty chord name".to_string()));
         }
         root_text.push(chars[0]);
-        idx = 1;
         while idx < chars.len() && (chars[idx] == '#' || chars[idx] == 'b') {
             root_text.push(chars[idx]);
             idx += 1;
         }
-        let root: PitchClass = root_text
-            .parse()
-            .map_err(|_| Error::Config(format!("invalid chord root '{root_text}' in '{trimmed}'")))?;
+        let root: PitchClass = root_text.parse().map_err(|_| {
+            Error::Config(format!("invalid chord root '{root_text}' in '{trimmed}'"))
+        })?;
         let suffix: String = chars[idx..].iter().collect();
         let kind = parse_chord_kind(&suffix).ok_or_else(|| {
             Error::Config(format!("unknown chord quality '{suffix}' in '{trimmed}'"))
@@ -272,8 +273,17 @@ mod tests {
     #[test]
     fn diatonicity_uses_the_key_scale() {
         let key = Key::new(PitchClass::A, super::super::key::Mode::Minor);
-        assert!(is_diatonic(&Chord::new(PitchClass::E, ChordKind::Major), &key));
-        assert!(is_diatonic(&Chord::new(PitchClass::C, ChordKind::Major), &key));
-        assert!(!is_diatonic(&Chord::new(PitchClass::FS, ChordKind::Major), &key));
+        assert!(is_diatonic(
+            &Chord::new(PitchClass::E, ChordKind::Major),
+            &key
+        ));
+        assert!(is_diatonic(
+            &Chord::new(PitchClass::C, ChordKind::Major),
+            &key
+        ));
+        assert!(!is_diatonic(
+            &Chord::new(PitchClass::FS, ChordKind::Major),
+            &key
+        ));
     }
 }

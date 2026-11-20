@@ -1,5 +1,6 @@
 //! Shared CLI helpers: terminal styling that respects `NO_COLOR` and TTY
 //! detection.
+#![allow(dead_code)]
 
 use crate::cli::GlobalArgs;
 
@@ -20,7 +21,10 @@ impl Global {
             && !args.quiet
             && std::env::var_os("NO_COLOR").is_none()
             && console::Term::stdout().features().is_attended();
-        Global { args: args.clone(), color }
+        Global {
+            args: args.clone(),
+            color,
+        }
     }
 
     /// Whether the process is running in quiet mode.

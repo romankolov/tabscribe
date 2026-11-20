@@ -27,7 +27,10 @@ pub fn rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
     }
-    let sum = samples.iter().map(|&s| f64::from(s) * f64::from(s)).sum::<f64>();
+    let sum = samples
+        .iter()
+        .map(|&s| f64::from(s) * f64::from(s))
+        .sum::<f64>();
     ((sum / samples.len() as f64).sqrt()) as f32
 }
 
@@ -87,7 +90,9 @@ impl Biquad {
         let b2 = (1.0 + cos_w0) / 2.0;
         let a1 = -2.0 * cos_w0;
         let a2 = 1.0 - alpha;
-        Biquad::new(b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32)
+        Biquad::new(
+            b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32,
+        )
     }
 
     /// A low-pass filter with the given cutoff and quality factor.
@@ -102,7 +107,9 @@ impl Biquad {
         let b2 = (1.0 - cos_w0) / 2.0;
         let a1 = -2.0 * cos_w0;
         let a2 = 1.0 - alpha;
-        Biquad::new(b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32)
+        Biquad::new(
+            b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32,
+        )
     }
 
     /// Filter a signal in place.
@@ -119,12 +126,12 @@ impl Biquad {
 
 /// Apply a high-pass filter to a signal, in place.
 pub fn high_pass(samples: &mut [f32], cutoff_hz: f64, sample_rate: u32) {
-    Biquad::high_pass(cutoff_hz, sample_rate, 0.7071).process(samples);
+    Biquad::high_pass(cutoff_hz, sample_rate, std::f64::consts::FRAC_1_SQRT_2).process(samples);
 }
 
 /// Apply a low-pass filter to a signal, in place.
 pub fn low_pass(samples: &mut [f32], cutoff_hz: f64, sample_rate: u32) {
-    Biquad::low_pass(cutoff_hz, sample_rate, 0.7071).process(samples);
+    Biquad::low_pass(cutoff_hz, sample_rate, std::f64::consts::FRAC_1_SQRT_2).process(samples);
 }
 
 /// The K-weighting filter of ITU-R BS.1770-4.
@@ -134,32 +141,36 @@ pub fn low_pass(samples: &mut [f32], cutoff_hz: f64, sample_rate: u32) {
 #[must_use]
 pub fn k_weighting(sample_rate: u32) -> (Biquad, Biquad) {
     // Stage 1: the "head" filter, a high-shelf.
-    let f0 = 1681.974_450_955_533;
-    let gain_db = 3.999_843_853_973_347;
-    let q = 0.707_175_236_955_419_6;
+    let f0 = 1681.974450955533;
+    let gain_db = 3.999843853973347;
+    let q = 0.7071752369554196;
 
     let k = (std::f64::consts::PI * f0 / f64::from(sample_rate)).tan();
     let vh = 10f64.powf(gain_db / 20.0);
-    let vb = vh.powf(0.499_666_774_154_541_6);
+    let vb = vh.powf(0.4996667741545416);
     let a0 = 1.0 + k / q + k * k;
     let b0 = vh + vb * k / q + k * k;
     let b1 = 2.0 * (k * k - vh);
     let b2 = vh - vb * k / q + k * k;
     let a1 = 2.0 * (k * k - 1.0);
     let a2 = 1.0 - k / q + k * k;
-    let stage1 = Biquad::new(b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32);
+    let stage1 = Biquad::new(
+        b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32,
+    );
 
     // Stage 2: the "RLB" filter, a high-pass.
-    let f0 = 38.135_470_876_024_44;
-    let q = 0.500_327_037_323_877_3;
+    let f0 = 38.13547087602444;
+    let q = 0.5003270373238773;
     let k = (std::f64::consts::PI * f0 / f64::from(sample_rate)).tan();
     let a0 = 1.0 + k / q + k * k;
     let b0 = 1.0;
     let b1 = -2.0;
     let b2 = 1.0;
     let a1 = 2.0 * (k * k - 1.0);
-    let a2 = (1.0 - k / q + k * k);
-    let stage2 = Biquad::new(b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32);
+    let a2 = 1.0 - k / q + k * k;
+    let stage2 = Biquad::new(
+        b0 as f32, b1 as f32, b2 as f32, a0 as f32, a1 as f32, a2 as f32,
+    );
 
     (stage1, stage2)
 }
@@ -241,7 +252,11 @@ pub fn loudness_normalize(samples: &mut [f32], sample_rate: u32, target_lufs: f6
     }
     // Do not amplify beyond full scale.
     let peak = peak_amplitude(samples);
-    let headroom = if peak > 1e-9 { 0.99 / f64::from(peak) } else { 1.0 };
+    let headroom = if peak > 1e-9 {
+        0.99 / f64::from(peak)
+    } else {
+        1.0
+    };
     let gain = gain.min(headroom);
     for sample in samples.iter_mut() {
         *sample = (f64::from(*sample) * gain) as f32;
@@ -285,16 +300,17 @@ mod tests {
             .collect();
         high_pass(&mut samples, 200.0, sample_rate);
         let rms_before = rms(&samples);
-        assert!(rms_before < 0.1, "the 20 Hz tone should be gone, rms {rms_before}");
+        assert!(
+            rms_before < 0.1,
+            "the 20 Hz tone should be gone, rms {rms_before}"
+        );
     }
 
     #[test]
     fn loudness_of_a_full_scale_tone_is_near_minus_three_lufs() {
         let sample_rate = 48_000;
         let samples: Vec<f32> = (0..48_000)
-            .map(|i| {
-                (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / 48_000.0).sin() as f32
-            })
+            .map(|i| (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / 48_000.0).sin() as f32)
             .collect();
         let loudness = integrated_loudness(&samples, sample_rate).expect("measurable");
         assert!(
@@ -303,4 +319,3 @@ mod tests {
         );
     }
 }
-

@@ -77,7 +77,10 @@ fn dispatch(cli: &Cli) -> anyhow::Result<()> {
                 cmd.print_help()?;
                 return Ok(());
             };
-            let args = TranscribeArgs { input, ..TranscribeArgs::default() };
+            let args = TranscribeArgs {
+                input,
+                ..TranscribeArgs::default()
+            };
             commands::transcribe(args, global)
         }
         Some(Command::Transcribe(args)) => commands::transcribe(args.clone(), global),
@@ -105,7 +108,10 @@ fn exit_code_for(err: &anyhow::Error) -> u8 {
                 _ => 1,
             };
         }
-        if current.downcast_ref::<tabscribe_models::ModelError>().is_some() {
+        if current
+            .downcast_ref::<tabscribe_models::ModelError>()
+            .is_some()
+        {
             return EXIT_MODEL;
         }
         if current.downcast_ref::<std::io::Error>().is_some() {

@@ -67,9 +67,7 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
     let labels = string_labels(tab);
 
     // Header.
-    let key_text = tab
-        .key
-        .map_or_else(|| "-".to_string(), |k| k.name());
+    let key_text = tab.key.map_or_else(|| "-".to_string(), |k| k.name());
     let _ = writeln!(
         out,
         "{}   Tempo: {:.0} BPM   Key: {}   Time: {}",
@@ -105,7 +103,7 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
         let mut line_width = 0usize;
         for &m in &line_measures {
             line_width += measure_width_for(
-                &tab,
+                tab,
                 m,
                 nominal_width,
                 options.columns_per_step,
@@ -132,7 +130,7 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
                 }
                 previous = Some(text.clone());
 
-                let chord_beat = chord_beat_of(&tab, chord.start.as_secs());
+                let chord_beat = chord_beat_of(tab, chord.start.as_secs());
                 let Some((m, _)) = locate(&tab.measures, chord_beat) else {
                     continue;
                 };
@@ -144,17 +142,15 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
                     if other == m {
                         break;
                     }
-                    column +=
-                        measure_width_for(&tab, other, nominal_width, options.columns_per_step, &notes_by_measure)
-                            + 1;
+                    column += measure_width_for(
+                        tab,
+                        other,
+                        nominal_width,
+                        options.columns_per_step,
+                        &notes_by_measure,
+                    ) + 1;
                 }
-                column += column_of(
-                    &tab,
-                    m,
-                    chord_beat,
-                    options.columns_per_step,
-                    nominal_width,
-                );
+                column += column_of(tab, m, chord_beat, options.columns_per_step, nominal_width);
                 placed.push((column + prefix, text));
             }
             placed.sort_by_key(|(c, _)| *c);
@@ -182,7 +178,7 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
             let mut line_text = format!("{label}|");
             for &m in &line_measures {
                 let width = measure_width_for(
-                    &tab,
+                    tab,
                     m,
                     nominal_width,
                     options.columns_per_step,
@@ -203,7 +199,7 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
                             continue;
                         }
                         let target = column_of(
-                            &tab,
+                            tab,
                             m,
                             note.start_beat,
                             options.columns_per_step,
@@ -236,13 +232,13 @@ pub fn render_tab(tab: &Tab, options: &AsciiTabOptions) -> String {
             let mut rhythm = format!("{}|", " ".repeat(labels.len()));
             for &m in &line_measures {
                 let width = measure_width_for(
-                    &tab,
+                    tab,
                     m,
                     nominal_width,
                     options.columns_per_step,
                     &notes_by_measure,
                 );
-                rhythm.push_str(&rhythm_line(&tab, m, width, options.columns_per_step));
+                rhythm.push_str(&rhythm_line(tab, m, width, options.columns_per_step));
                 rhythm.push('|');
             }
             out.push_str(rhythm.trim_end());
@@ -328,10 +324,7 @@ fn chord_beat_of(tab: &Tab, seconds: f64) -> f64 {
 }
 
 /// Locate a musical position inside the measures.
-fn locate(
-    measures: &[crate::transcription::Measure],
-    beat: f64,
-) -> Option<(usize, f64)> {
+fn locate(measures: &[crate::transcription::Measure], beat: f64) -> Option<(usize, f64)> {
     let index = measure_index_of(measures, beat);
     let measure = measures.get(index)?;
     Some((index, beat - measure.start_beat))
@@ -393,12 +386,7 @@ fn measure_width_for(
 }
 
 /// The rhythm line of a measure.
-fn rhythm_line(
-    tab: &Tab,
-    measure_index: usize,
-    width: usize,
-    columns_per_step: u16,
-) -> String {
+fn rhythm_line(tab: &Tab, measure_index: usize, width: usize, columns_per_step: u16) -> String {
     let mut cells = vec![' '; width];
     let Some(measure) = tab.measures.get(measure_index) else {
         return cells.into_iter().collect();

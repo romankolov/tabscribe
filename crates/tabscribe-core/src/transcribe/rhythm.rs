@@ -108,7 +108,7 @@ fn magnitude_spectrum(
     let bins = buffer.len() / 2 + 1;
     buffer[..bins]
         .iter()
-        .map(|value| value.norm() as f32)
+        .map(|value| value.norm())
         .collect()
 }
 
@@ -479,10 +479,22 @@ pub fn track_beats(envelope: &OnsetEnvelope, tempo: Tempo) -> Vec<f64> {
 
 /// The candidate time signatures, in the order they are tested.
 const CANDIDATE_METERS: &[TimeSignature] = &[
-    TimeSignature { numerator: 4, denominator: 4 },
-    TimeSignature { numerator: 3, denominator: 4 },
-    TimeSignature { numerator: 2, denominator: 4 },
-    TimeSignature { numerator: 6, denominator: 8 },
+    TimeSignature {
+        numerator: 4,
+        denominator: 4,
+    },
+    TimeSignature {
+        numerator: 3,
+        denominator: 4,
+    },
+    TimeSignature {
+        numerator: 2,
+        denominator: 4,
+    },
+    TimeSignature {
+        numerator: 6,
+        denominator: 8,
+    },
 ];
 
 /// Detect the time signature of a piece.
@@ -825,7 +837,11 @@ mod tests {
         let config = SpectrumConfig::for_sample_rate(sample_rate);
         let envelope = onset_envelope(&signal, sample_rate, &config);
         let onsets = detect_onsets(&envelope, 0.5);
-        assert!(onsets.len() >= 7, "expected about 8 onsets, got {}", onsets.len());
+        assert!(
+            onsets.len() >= 7,
+            "expected about 8 onsets, got {}",
+            onsets.len()
+        );
         for onset in &onsets {
             let nearest = (onset / 0.5).round() * 0.5;
             assert!(
@@ -857,7 +873,11 @@ mod tests {
         let envelope = onset_envelope(&signal, sample_rate, &config);
         let estimate = estimate_tempo(&envelope);
         let beats = track_beats(&envelope, estimate.tempo);
-        assert!(beats.len() >= 10, "expected about 12 beats, got {}", beats.len());
+        assert!(
+            beats.len() >= 10,
+            "expected about 12 beats, got {}",
+            beats.len()
+        );
         let gaps: Vec<f64> = beats.windows(2).map(|w| w[1] - w[0]).collect();
         let average = gaps.iter().sum::<f64>() / gaps.len() as f64;
         assert!(

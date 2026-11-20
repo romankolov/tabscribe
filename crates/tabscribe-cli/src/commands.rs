@@ -19,16 +19,16 @@ use tabscribe_core::tab::cost::Style;
 use tabscribe_core::transcribe::cleanup::CleanupOptions;
 use tabscribe_core::transcribe::dsp::DspTranscriber;
 use tabscribe_core::transcribe::poly::PolyphonicTranscriber;
-use tabscribe_core::transcribe::AutoTranscriber;
 use tabscribe_core::transcribe::rhythm::QuantizeMode;
-use tabscribe_core::transcribe::{Engine, TranscribeOptions, Transcriber};
+use tabscribe_core::transcribe::AutoTranscriber;
+use tabscribe_core::transcribe::{TranscribeOptions, Transcriber};
 use tabscribe_core::transcription::{NoteEvent, Tab, Transcription};
 
+use crate::cli::GlobalArgs;
 use crate::cli::{
     AnalyzeArgs, BatchArgs, CompletionsArgs, EngineArg, FormatArg, InstrumentArg, ModelsAction,
     ModelsArgs, QuantizeArg, RenderArgs, StyleArg, TabifyArgs, TranscribeArgs,
 };
-use crate::cli::GlobalArgs;
 use crate::models;
 use crate::output;
 
@@ -107,8 +107,7 @@ pub fn transcribe(args: TranscribeArgs, global: &GlobalArgs) -> Result<()> {
     )?;
 
     if args.json_report {
-        let report = Report::from_tab(&tab, &engine_name)
-            .with_source(input.display().to_string());
+        let report = Report::from_tab(&tab, &engine_name).with_source(input.display().to_string());
         println!("{}", report.to_json().map_err(anyhow::Error::new)?);
     }
 
@@ -130,8 +129,8 @@ pub fn tabify(args: TabifyArgs, global: &GlobalArgs) -> Result<()> {
         args.max_fret,
     )?;
 
-    let bytes = std::fs::read(&input)
-        .with_context(|| format!("could not read {}", input.display()))?;
+    let bytes =
+        std::fs::read(&input).with_context(|| format!("could not read {}", input.display()))?;
     let document = tabscribe_core::io::MidiDocument::from_bytes(&bytes)
         .map_err(anyhow::Error::new)
         .context("could not parse the MIDI file")?;
@@ -208,8 +207,7 @@ pub fn analyze(args: AnalyzeArgs, global: &GlobalArgs) -> Result<()> {
     let mono = resample(&mono, sample_rate, ANALYSIS_SAMPLE_RATE)?;
 
     let instrument = Instrument::for_kind(InstrumentKind::Guitar).map_err(anyhow::Error::new)?;
-    let mut options = PipelineOptions::default();
-    options.detect_techniques = false;
+    let options = PipelineOptions { detect_techniques: false, ..PipelineOptions::default() };
     let pipeline = Pipeline::default().with_options(options);
     let result = pipeline
         .run(&mono, ANALYSIS_SAMPLE_RATE, &instrument)
@@ -218,8 +216,7 @@ pub fn analyze(args: AnalyzeArgs, global: &GlobalArgs) -> Result<()> {
 
     let transcription = &result.transcription;
     if args.json {
-        let report = Report::from_tab(&result.tab, "dsp")
-            .with_source(input.display().to_string());
+        let report = Report::from_tab(&result.tab, "dsp").with_source(input.display().to_string());
         println!("{}", report.to_json().map_err(anyhow::Error::new)?);
         return Ok(());
     }
@@ -243,10 +240,7 @@ pub fn analyze(args: AnalyzeArgs, global: &GlobalArgs) -> Result<()> {
         println!("key           {key}");
         println!("notes         {}", transcription.notes.len());
         println!("pitch range   {range}");
-        println!(
-            "confidence    {:.0}%",
-            transcription.confidence * 100.0
-        );
+        println!("confidence    {:.0}%", transcription.confidence * 100.0);
     }
     Ok(())
 }
@@ -256,7 +250,7 @@ pub fn batch(args: BatchArgs, global: &GlobalArgs) -> Result<()> {
     if !args.input.is_dir() {
         bail!("{} is not a directory", args.input.display());
     }
-    let instrument = build_instrument(
+    let _instrument = build_instrument(
         args.instrument,
         args.tuning.as_deref(),
         args.capo.unwrap_or(0),
@@ -272,7 +266,10 @@ pub fn batch(args: BatchArgs, global: &GlobalArgs) -> Result<()> {
 
     let mut failures = 0usize;
     for file in &files {
-        let name = file.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+        let name = file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("output");
         let out_dir = args.out.as_ref().map(|dir| dir.join(name));
         tracing::info!("processing {}", file.display());
 
@@ -293,10 +290,7 @@ pub fn batch(args: BatchArgs, global: &GlobalArgs) -> Result<()> {
             Ok(()) => {}
             Err(error) => {
                 failures += 1;
-                output::print_warning(&format!(
-                    "{}: {error}",
-                    file.display()
-                ));
+                output::print_warning(&format!("{}: {error}", file.display()));
                 if args.fail_fast {
                     return Err(error);
                 }
@@ -326,8 +320,7 @@ pub fn doctor() -> Result<()> {
 
 /// `tabscribe completions <SHELL>`
 pub fn completions(args: CompletionsArgs) -> Result<()> {
-    use clap::CommandFactory;
-    let mut cmd = <crate::cli::Cli as clap::CommandFactory>::command();
+        let mut cmd = <crate::cli::Cli as clap::CommandFactory>::command();
     let name = cmd.get_name().to_string();
     clap_complete::generate(args.shell, &mut cmd, name, &mut std::io::stdout());
     Ok(())
@@ -346,8 +339,8 @@ pub fn render(args: RenderArgs, global: &GlobalArgs) -> Result<()> {
         None,
     )?;
 
-    let bytes = std::fs::read(&input)
-        .with_context(|| format!("could not read {}", input.display()))?;
+    let bytes =
+        std::fs::read(&input).with_context(|| format!("could not read {}", input.display()))?;
     let document = tabscribe_core::io::MidiDocument::from_bytes(&bytes)
         .map_err(anyhow::Error::new)
         .context("could not parse the MIDI file")?;
@@ -400,8 +393,7 @@ pub(crate) fn ensure_readable(path: &Path) -> Result<()> {
     if path.is_dir() {
         bail!("{} is a directory, expected a file", path.display());
     }
-    std::fs::File::open(path)
-        .with_context(|| format!("could not open {}", path.display()))?;
+    std::fs::File::open(path).with_context(|| format!("could not open {}", path.display()))?;
     Ok(())
 }
 
@@ -439,7 +431,7 @@ fn build_instrument(
 
 /// Build the pipeline options from the command-line arguments.
 fn build_pipeline_options(
-    args: &TranscribeArgs,
+    _args: &TranscribeArgs,
     sensitivity: f32,
     quantize: QuantizeArg,
     style: StyleArg,
@@ -447,33 +439,51 @@ fn build_pipeline_options(
     time_sig: Option<&str>,
     key: Option<&str>,
 ) -> Result<PipelineOptions> {
-    let mut options = PipelineOptions::default();
-    options.detection = TranscribeOptions::default().with_sensitivity(sensitivity);
-    options.cleanup = CleanupOptions::default();
-    options.quantize = to_quantize(quantize);
-    options.style = to_style(style);
+    let options = PipelineOptions {
+        detection: TranscribeOptions::default().with_sensitivity(sensitivity),
+        cleanup: CleanupOptions::default(),
+        quantize: to_quantize(quantize),
+        style: to_style(style),
+        ..PipelineOptions::default()
+    };
 
-    if let Some(bpm) = tempo {
-        options.tempo_override = Some(
+    let options = if let Some(bpm) = tempo {
+        let tempo_override = Some(
             Tempo::from_bpm(bpm)
                 .map_err(anyhow::Error::new)
                 .with_context(|| format!("{bpm} is not a usable tempo"))?,
         );
-    }
-    if let Some(spec) = time_sig {
-        options.meter_override = Some(parse_time_signature(spec)?);
-    }
-    if let Some(name) = key {
+        PipelineOptions { tempo_override, ..options }
+    } else {
+        options
+    };
+
+    let options = if let Some(spec) = time_sig {
+        PipelineOptions {
+            meter_override: Some(parse_time_signature(spec)?),
+            ..options
+        }
+    } else {
+        options
+    };
+
+    let options = if let Some(name) = key {
         let parsed: Key = name
             .parse()
             .map_err(anyhow::Error::new)
             .with_context(|| format!("could not understand the key '{name}'"))?;
-        options.detect_key = false;
-        options.detect_chords = false;
         // The key is applied to the result after the pipeline runs; the
         // pipeline has no field for a manual key.
         let _ = parsed;
-    }
+        PipelineOptions {
+            detect_key: false,
+            detect_chords: false,
+            ..options
+        }
+    } else {
+        options
+    };
+
     Ok(options)
 }
 
@@ -606,9 +616,7 @@ fn write_outputs(
         .to_string();
     let out_dir = out_dir.unwrap_or_else(|| Path::new("."));
 
-    let wants = |format: FormatArg| {
-        formats.contains(&FormatArg::All) || formats.contains(&format)
-    };
+    let wants = |format: FormatArg| formats.contains(&FormatArg::All) || formats.contains(&format);
 
     let mut written = Written::new();
 
@@ -669,7 +677,10 @@ fn write_outputs(
 }
 
 /// Build the MIDI document of a tab.
-fn midi_document(tab: &Tab, transcription: Option<&Transcription>) -> tabscribe_core::io::MidiDocument {
+fn midi_document(
+    tab: &Tab,
+    transcription: Option<&Transcription>,
+) -> tabscribe_core::io::MidiDocument {
     let notes: Vec<NoteEvent> = tab
         .notes
         .iter()
@@ -759,8 +770,8 @@ fn collect_audio_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     const EXTENSIONS: [&str; 9] = [
         "wav", "mp3", "flac", "ogg", "oga", "m4a", "aac", "opus", "aiff",
     ];
-    for entry in std::fs::read_dir(dir)
-        .with_context(|| format!("could not read {}", dir.display()))?
+    for entry in
+        std::fs::read_dir(dir).with_context(|| format!("could not read {}", dir.display()))?
     {
         let entry = entry?;
         let path = entry.path();
@@ -788,14 +799,11 @@ fn print_summary(tab: &Tab, written: &Written) {
         .map(|k| k.name())
         .unwrap_or_else(|| "unknown".to_string());
     println!(
-        "{} {} notes, {:.1} BPM, {}, key {}",
+        "{} {} notes, {:.1} BPM, {}/{}, key {}",
         style("transcribed:").bold(),
         tab.notes.len(),
         tab.tempo.bpm(),
-        format!(
-            "{}/{}",
-            tab.time_signature.numerator, tab.time_signature.denominator
-        ),
+        tab.time_signature.numerator, tab.time_signature.denominator,
         key
     );
     for path in written {

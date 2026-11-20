@@ -65,7 +65,9 @@ impl MidiDocument {
     /// Construct a document with a single track.
     #[must_use]
     pub fn single(track: MidiTrack) -> Self {
-        MidiDocument { tracks: vec![track] }
+        MidiDocument {
+            tracks: vec![track],
+        }
     }
 
     /// The notes of every track, merged and sorted by onset.
@@ -93,12 +95,16 @@ impl MidiDocument {
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let header = Header::new(
             Format::Parallel,
-            Timing::Metrical(u15::new(u16::from(TICKS_PER_QUARTER))),
+            Timing::Metrical(u15::new(TICKS_PER_QUARTER)),
         );
 
         // The track names are borrowed by the events, so they have to outlive
         // the event lists.
-        let names: Vec<Vec<u8>> = self.tracks.iter().map(|t| t.name.as_bytes().to_vec()).collect();
+        let names: Vec<Vec<u8>> = self
+            .tracks
+            .iter()
+            .map(|t| t.name.as_bytes().to_vec())
+            .collect();
         let tracks: Vec<Vec<TrackEvent<'_>>> = self
             .tracks
             .iter()
@@ -133,12 +139,15 @@ impl MidiDocument {
         let mut tempo_changes: Vec<(u32, Tempo)> = Vec::new();
         let mut time_signature = TimeSignature::COMMON;
         for track_result in track_iter {
-            let events = track_result
-                .map_err(|e| Error::Serde { what: "MIDI track".to_string(), reason: e.to_string() })?;
+            let events = track_result.map_err(|e| Error::Serde {
+                what: "MIDI track".to_string(),
+                reason: e.to_string(),
+            })?;
             let mut tick = 0u32;
             for event_result in events {
-                let event = event_result.map_err(|e| {
-                    Error::Serde { what: "MIDI event".to_string(), reason: e.to_string() }
+                let event = event_result.map_err(|e| Error::Serde {
+                    what: "MIDI event".to_string(),
+                    reason: e.to_string(),
                 })?;
                 tick = tick.saturating_add(event.delta.as_int());
                 if let TrackEventKind::Meta(meta) = event.kind {
@@ -173,8 +182,10 @@ impl MidiDocument {
             .1
             .enumerate()
         {
-            let events = track_result
-                .map_err(|e| Error::Serde { what: "MIDI track".to_string(), reason: e.to_string() })?;
+            let events = track_result.map_err(|e| Error::Serde {
+                what: "MIDI track".to_string(),
+                reason: e.to_string(),
+            })?;
 
             let mut name = format!("Track {}", index + 1);
             let mut program = 0u8;
@@ -185,13 +196,17 @@ impl MidiDocument {
             let mut notes: Vec<NoteEvent> = Vec::new();
 
             for event_result in events {
-                let event = event_result.map_err(|e| {
-                    Error::Serde { what: "MIDI event".to_string(), reason: e.to_string() }
+                let event = event_result.map_err(|e| Error::Serde {
+                    what: "MIDI event".to_string(),
+                    reason: e.to_string(),
                 })?;
                 tick = tick.saturating_add(event.delta.as_int());
 
                 match event.kind {
-                    TrackEventKind::Midi { channel: ch, message } => match message {
+                    TrackEventKind::Midi {
+                        channel: ch,
+                        message,
+                    } => match message {
                         MidiMessage::NoteOn { key, vel } if vel.as_int() > 0 => {
                             pending.insert((key.as_int(), ch.as_int()), (tick, vel.as_int()));
                         }
@@ -204,25 +219,19 @@ impl MidiDocument {
                                 notes.push(NoteEvent {
                                     pitch: MidiNote::clamped(u16::from(key.as_int())),
                                     start,
-                                    end: Seconds::from_secs(
-                                        end.as_secs().max(start.as_secs()),
-                                    ),
+                                    end: Seconds::from_secs(end.as_secs().max(start.as_secs())),
                                     velocity: vel,
                                     confidence: 1.0,
                                 });
                             }
                         }
-                        MidiMessage::ProgramChange { program: p } => {
-                            if ch.as_int() == channel {
-                                program = p.as_int();
-                            }
+                        MidiMessage::ProgramChange { program: p } if ch.as_int() == channel => {
+                            program = p.as_int();
                         }
                         _ => {}
                     },
-                    TrackEventKind::Meta(meta) => {
-                        if let MetaMessage::TrackName(bytes) = meta {
-                            name = String::from_utf8_lossy(bytes).to_string();
-                        }
+                    TrackEventKind::Meta(MetaMessage::TrackName(bytes)) => {
+                        name = String::from_utf8_lossy(bytes).to_string();
                     }
                     _ => {}
                 }
@@ -272,6 +281,7 @@ impl MidiDocument {
 }
 
 /// Build the event list of a track.
+#[allow(clippy::vec_init_then_push)]
 fn build_track<'a>(track: &MidiTrack, name: &'a [u8]) -> Vec<TrackEvent<'a>> {
     let mut out: Vec<TrackEvent<'_>> = Vec::new();
 
@@ -298,7 +308,9 @@ fn build_track<'a>(track: &MidiTrack, name: &'a [u8]) -> Vec<TrackEvent<'a>> {
         delta: u28::new(0),
         kind: TrackEventKind::Midi {
             channel: u4::new(track.channel),
-            message: MidiMessage::ProgramChange { program: u7::new(track.program) },
+            message: MidiMessage::ProgramChange {
+                program: u7::new(track.program),
+            },
         },
     });
 

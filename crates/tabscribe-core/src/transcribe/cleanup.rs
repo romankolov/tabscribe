@@ -156,8 +156,16 @@ mod tests {
     #[test]
     fn short_notes_are_removed() {
         let notes = vec![
-            NoteEvent::new(MidiNote::new(60).expect("valid"), Seconds::from_secs(0.0), Seconds::from_secs(0.01)),
-            NoteEvent::new(MidiNote::new(62).expect("valid"), Seconds::from_secs(1.0), Seconds::from_secs(2.0)),
+            NoteEvent::new(
+                MidiNote::new(60).expect("valid"),
+                Seconds::from_secs(0.0),
+                Seconds::from_secs(0.01),
+            ),
+            NoteEvent::new(
+                MidiNote::new(62).expect("valid"),
+                Seconds::from_secs(1.0),
+                Seconds::from_secs(2.0),
+            ),
         ];
         let cleaned = cleanup(&notes, None, &CleanupOptions::default());
         assert_eq!(cleaned.len(), 1);
@@ -167,8 +175,16 @@ mod tests {
     #[test]
     fn fragmented_notes_are_merged() {
         let notes = vec![
-            NoteEvent::new(MidiNote::new(60).expect("valid"), Seconds::from_secs(0.0), Seconds::from_secs(0.5)),
-            NoteEvent::new(MidiNote::new(60).expect("valid"), Seconds::from_secs(0.51), Seconds::from_secs(1.0)),
+            NoteEvent::new(
+                MidiNote::new(60).expect("valid"),
+                Seconds::from_secs(0.0),
+                Seconds::from_secs(0.5),
+            ),
+            NoteEvent::new(
+                MidiNote::new(60).expect("valid"),
+                Seconds::from_secs(0.51),
+                Seconds::from_secs(1.0),
+            ),
         ];
         let cleaned = cleanup(&notes, None, &CleanupOptions::default());
         assert_eq!(cleaned.len(), 1);
@@ -179,8 +195,16 @@ mod tests {
     fn unplayable_notes_are_removed() {
         let instrument = Instrument::for_kind(InstrumentKind::Guitar).expect("valid");
         let notes = vec![
-            NoteEvent::new(MidiNote::new(60).expect("valid"), Seconds::from_secs(0.0), Seconds::from_secs(1.0)),
-            NoteEvent::new(MidiNote::new(20).expect("valid"), Seconds::from_secs(0.0), Seconds::from_secs(1.0)),
+            NoteEvent::new(
+                MidiNote::new(60).expect("valid"),
+                Seconds::from_secs(0.0),
+                Seconds::from_secs(1.0),
+            ),
+            NoteEvent::new(
+                MidiNote::new(20).expect("valid"),
+                Seconds::from_secs(0.0),
+                Seconds::from_secs(1.0),
+            ),
         ];
         let cleaned = cleanup(&notes, Some(&instrument), &CleanupOptions::default());
         assert_eq!(cleaned.len(), 1);

@@ -94,9 +94,10 @@ pub enum Command {
 }
 
 /// The instrument to assume.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum InstrumentArg {
     /// A six-string guitar in standard tuning.
+    #[default]
     Guitar,
     /// A bass guitar (4, 5 or 6 strings depending on the tuning).
     Bass,
@@ -107,9 +108,10 @@ pub enum InstrumentArg {
 }
 
 /// Which pitch-detection engine to use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum EngineArg {
     /// Pick the best engine for the material.
+    #[default]
     Auto,
     /// The neural polyphonic engine.
     Neural,
@@ -120,20 +122,22 @@ pub enum EngineArg {
 }
 
 /// How aggressively to quantize the transcribed rhythm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum QuantizeArg {
     /// Snap every note exactly to the grid.
     Strict,
     /// Snap only when the note is close enough to the grid.
+    #[default]
     Musical,
     /// Keep the performed timing.
     Off,
 }
 
 /// The preferred hand position for the tablature optimizer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum StyleArg {
     /// Balance movement, span and shape preferences.
+    #[default]
     Balanced,
     /// Keep the hand as low on the neck as possible.
     LowPosition,
@@ -145,40 +149,11 @@ pub enum StyleArg {
     Lead,
 }
 
-impl Default for InstrumentArg {
-    fn default() -> Self {
-        InstrumentArg::Guitar
-    }
-}
-
-impl Default for EngineArg {
-    fn default() -> Self {
-        EngineArg::Auto
-    }
-}
-
-impl Default for QuantizeArg {
-    fn default() -> Self {
-        QuantizeArg::Musical
-    }
-}
-
-impl Default for StyleArg {
-    fn default() -> Self {
-        StyleArg::Balanced
-    }
-}
-
-impl Default for FormatArg {
-    fn default() -> Self {
-        FormatArg::All
-    }
-}
-
 /// Which output formats to write.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 pub enum FormatArg {
     /// Standard MIDI file.
+    #[default]
     Midi,
     /// ASCII tablature.
     Txt,
@@ -214,7 +189,13 @@ pub struct TranscribeArgs {
     pub out: Option<PathBuf>,
 
     /// The output format(s) to write.
-    #[arg(short = 'f', long = "format", value_enum, value_delimiter = ',', default_value = "all")]
+    #[arg(
+        short = 'f',
+        long = "format",
+        value_enum,
+        value_delimiter = ',',
+        default_value = "all"
+    )]
     pub format: Vec<FormatArg>,
 
     /// The pitch detection engine.
@@ -320,7 +301,13 @@ pub struct TabifyArgs {
     pub out: Option<PathBuf>,
 
     /// The output format(s) to write.
-    #[arg(short = 'f', long = "format", value_enum, value_delimiter = ',', default_value = "all")]
+    #[arg(
+        short = 'f',
+        long = "format",
+        value_enum,
+        value_delimiter = ',',
+        default_value = "all"
+    )]
     pub format: Vec<FormatArg>,
 
     /// The preferred tablature position.
@@ -381,7 +368,13 @@ pub struct BatchArgs {
     pub out: Option<PathBuf>,
 
     /// The output format(s) to write.
-    #[arg(short = 'f', long = "format", value_enum, value_delimiter = ',', default_value = "txt")]
+    #[arg(
+        short = 'f',
+        long = "format",
+        value_enum,
+        value_delimiter = ',',
+        default_value = "txt"
+    )]
     pub format: Vec<FormatArg>,
 
     /// The instrument to assume.

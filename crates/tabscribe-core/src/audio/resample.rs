@@ -133,9 +133,7 @@ mod tests {
     fn sine(freq: f64, rate: u32, seconds: f64) -> Vec<f32> {
         let n = (rate as f64 * seconds) as usize;
         (0..n)
-            .map(|i| {
-                (2.0 * std::f64::consts::PI * freq * i as f64 / rate as f64).sin() as f32
-            })
+            .map(|i| (2.0 * std::f64::consts::PI * freq * i as f64 / rate as f64).sin() as f32)
             .collect()
     }
 

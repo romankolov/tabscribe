@@ -178,12 +178,10 @@ impl ModelSource {
     /// Returns [`ModelError::Io`] when a file-backed model cannot be read.
     pub fn bytes(&self) -> Result<Vec<u8>, ModelError> {
         match self {
-            ModelSource::File(path) => {
-                std::fs::read(path).map_err(|source| ModelError::Io {
-                    path: path.clone(),
-                    source,
-                })
-            }
+            ModelSource::File(path) => std::fs::read(path).map_err(|source| ModelError::Io {
+                path: path.clone(),
+                source,
+            }),
             ModelSource::Embedded { bytes, .. } => Ok(bytes.to_vec()),
         }
     }
@@ -204,9 +202,9 @@ pub fn resolve(
     name: &str,
     embedded: Option<(&'static str, &'static [u8])>,
 ) -> Result<ResolvedModel, ModelError> {
-    let entry = manifest
-        .get(name)
-        .ok_or_else(|| ModelError::Unknown { name: name.to_string() })?;
+    let entry = manifest.get(name).ok_or_else(|| ModelError::Unknown {
+        name: name.to_string(),
+    })?;
     let path = model_dir.join(&entry.file);
     if path.exists() {
         return Ok(ResolvedModel {

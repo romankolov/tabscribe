@@ -2,10 +2,11 @@
 //!
 //! Run with `cargo run --example chroma -p tabscribe-core`.
 
-use tabscribe_core::music::{Instrument, InstrumentKind};
-use tabscribe_core::transcribe::harmony::{chroma_track, detect_key, recognise_chord};
+use tabscribe_core::transcribe::harmony::{chroma_track, recognise_chord};
 
-const NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const NAMES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
 
 /// A tone with a few harmonics.
 fn tone(freq: f64, seconds: f64, sample_rate: u32) -> Vec<f32> {
@@ -22,45 +23,50 @@ fn tone(freq: f64, seconds: f64, sample_rate: u32) -> Vec<f32> {
         .collect()
 }
 
-/// A chord: a few tones played together.
-fn chord(freqs: &[f64], seconds: f64, sample_rate: u32) -> Vec<f32> {
-    let mut out = Vec::new();
-    for freq in freqs {
-        out.extend(tone(*freq, seconds, sample_rate));
-    }
-    out
-}
-
 fn main() {
     debug_pipeline();
 }
 
 fn debug_pipeline() {
     use tabscribe_core::pipeline::Pipeline;
-    use tabscribe_core::music::InstrumentKind;
 
     let sr = 22050;
     let mut signal = Vec::new();
     for f in [220.0, 261.63, 329.63, 440.0, 329.63, 261.63, 220.0, 196.0] {
         signal.extend(tone(f, 0.35, sr));
     }
-    let instrument = Instrument::for_kind(InstrumentKind::Guitar).unwrap();
-
+    
     let spectrum = tabscribe_core::transcribe::rhythm::SpectrumConfig::for_sample_rate(sr);
     let envelope = tabscribe_core::transcribe::rhythm::onset_envelope(&signal, sr, &spectrum);
     let est = tabscribe_core::transcribe::rhythm::estimate_tempo(&envelope);
     println!("tempo {:?} phase {:.4}", est.tempo.bpm(), est.phase);
     let beats = tabscribe_core::transcribe::rhythm::track_beats(&envelope, est.tempo);
-    println!("beats: {:?}", beats.iter().map(|b| (b*1000.0).round()/1000.0).collect::<Vec<_>>());
+    println!(
+        "beats: {:?}",
+        beats
+            .iter()
+            .map(|b| (b * 1000.0).round() / 1000.0)
+            .collect::<Vec<_>>()
+    );
 
     let track = chroma_track(&signal, sr);
-    println!("chroma frame times: {:?}", track.times.iter().take(6).map(|t| (t*1000.0).round()/1000.0).collect::<Vec<_>>());
+    println!(
+        "chroma frame times: {:?}",
+        track
+            .times
+            .iter()
+            .take(6)
+            .map(|t| (t * 1000.0).round() / 1000.0)
+            .collect::<Vec<_>>()
+    );
     for (i, b) in beats.iter().enumerate().take(6) {
-        let end = beats.get(i+1).copied().unwrap_or(b + 0.348);
+        let end = beats.get(i + 1).copied().unwrap_or(b + 0.348);
         let seg = track.between(*b, end);
         let mut s = String::new();
         for (k, v) in seg.iter().enumerate() {
-            if *v > 0.05 { s.push_str(&format!("{}={:.2} ", NAMES[k], v)); }
+            if *v > 0.05 {
+                s.push_str(&format!("{}={:.2} ", NAMES[k], v));
+            }
         }
         let (c, _) = recognise_chord(&seg, None).expect("chord");
         println!("beat {i} @ {:.3} -> {} | {}", b, s, c.name());
