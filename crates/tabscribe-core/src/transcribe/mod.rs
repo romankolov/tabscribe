@@ -118,10 +118,9 @@ impl Engine {
 
 /// The engine that picks the best analyser for the material.
 ///
-/// The choice is made once, from the periodicity of the whole signal: a
-/// signal that is well explained by a single period is transcribed with the
-/// monophonic detector, which is more accurate; a signal that is not is
-/// transcribed with the polyphonic one.
+/// The choice is made from the periodicity of the signal: a signal that is
+/// well explained by a single period uses the monophonic detector, which is
+/// more accurate; a signal that is not uses the polyphonic detector.
 #[derive(Debug, Clone)]
 pub struct AutoTranscriber {
     /// The monophonic detector.
@@ -211,7 +210,7 @@ pub fn estimate_material(signal: &[f32]) -> Material {
     // A single note scores above 0.95; a chord of three or more notes scores
     // below 0.85. The threshold sits in between, closer to the chord, because
     // treating a monophonic line as polyphonic is the more damaging mistake.
-    if median < 0.90 {
+    if median < 0.80 {
         Material::Polyphonic
     } else {
         Material::Monophonic

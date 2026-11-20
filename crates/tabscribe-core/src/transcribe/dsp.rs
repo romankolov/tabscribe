@@ -548,6 +548,37 @@ fn weigh_by_salience(posterior: &mut Posterior, spectrum: &[f32], bin_hz: f64, c
     for (candidate, salience) in posterior.candidates.iter_mut().zip(saliences.iter()) {
         let ratio = (salience / strongest).clamp(0.0, 1.0);
         candidate.probability *= ratio.powf(SALIENCE_EXPONENT);
+
+        // Sub-harmonic dominance check: if a sub-harmonic (half or a third
+        // of the candidate's frequency) has stronger energy in the spectrum
+        // than the candidate itself, then the candidate is likely a harmonic
+        // of a lower note, not a fundamental. This is the cure for YIN's
+        // tendency to lock onto the strongest harmonic instead of the true
+        // fundamental (e.g. detecting B3 instead of E2 when E2's 3rd
+        // harmonic happens to be strong).
+        let refined = parabolic_refine(candidate);
+        if refined > 0.0 {
+            let frequency = config.sample_rate as f64 / refined;
+            let candidate_bin = (frequency / bin_hz).round() as usize;
+            let candidate_strength = if candidate_bin < spectrum.len() {
+                spectrum[candidate_bin]
+            } else {
+                0.0
+            };
+            for divisor in [2.0, 3.0] {
+                let sub_freq = frequency / divisor;
+                if sub_freq < config.min_frequency {
+                    continue;
+                }
+                let sub_bin = (sub_freq / bin_hz).round() as usize;
+                if sub_bin < spectrum.len() && spectrum[sub_bin] > candidate_strength * 1.5 {
+                    // Sub-harmonic is stronger: this candidate is a harmonic.
+                    // Reduce its probability strongly.
+                    candidate.probability *= 0.05;
+                    break;
+                }
+            }
+        }
     }
 }
 

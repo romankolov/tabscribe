@@ -258,7 +258,7 @@ pub struct TempoEstimate {
 /// 4/4 has a strong periodicity at the length of the bar, which can easily
 /// be stronger than the periodicity of the beat. The prior is what keeps the
 /// estimate on the beat.
-const TEMPO_PRIOR_CENTRE: f64 = 120.0;
+const TEMPO_PRIOR_CENTRE: f64 = 90.0;
 
 /// The width of the prior, in octaves.
 const TEMPO_PRIOR_WIDTH: f64 = 1.0;
@@ -349,15 +349,36 @@ pub fn estimate_tempo(envelope: &OnsetEnvelope) -> TempoEstimate {
     let period = best_lag as f64 * envelope.hop_seconds;
     let bpm = 60.0 / period;
 
-    // Keep the tempo in the band in which music is actually written: a piece
-    // in 6/8 is often felt at half the speed of the same piece in 3/4, and
-    // the faster reading gives a finer beat grid.
+    // Keep the tempo in the band in which music is actually written.
     let mut bpm = bpm;
     while bpm < 60.0 && bpm * 2.0 <= max_bpm {
         bpm *= 2.0;
     }
     while bpm > 200.0 && bpm / 2.0 >= min_bpm {
         bpm /= 2.0;
+    }
+
+    // Prefer the slower tempo when there's a strong 2:1 relationship.
+    // The onset envelope often has strong periodicity at both the beat
+    // level and the subdivision level (e.g. eighth notes in an arpeggio).
+    // When autocorrelation finds a peak at 2x the true tempo, the prior
+    // alone may not be enough to pull it back down, so we explicitly
+    // check: if half the current tempo has a comparable autocorrelation
+    // peak, choose the slower tempo (musical convention).
+    let half_bpm = bpm / 2.0;
+    if half_bpm >= min_bpm {
+        let half_lag = (60.0 / half_bpm / envelope.hop_seconds).round() as usize;
+        if half_lag > 0 && half_lag < centered.len() / 2 {
+            let mut half_sum = 0.0;
+            for index in 0..(centered.len() - half_lag) {
+                half_sum += centered[index] * centered[index + half_lag];
+            }
+            let half_raw = half_sum / (centered.len() - half_lag) as f64;
+            // If the half-tempo peak is at least 60% as strong, prefer it.
+            if half_raw >= best_raw * 0.6 {
+                bpm = half_bpm;
+            }
+        }
     }
 
     let tempo = Tempo::from_bpm(bpm).unwrap_or(Tempo::DEFAULT);

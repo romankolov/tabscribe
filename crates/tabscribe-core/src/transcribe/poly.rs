@@ -26,6 +26,7 @@
 //! tablature as a note the player cannot explain.
 
 use rustfft::num_complex::Complex;
+use std::collections::HashSet;
 use rustfft::FftPlanner;
 
 use crate::error::{Error, Result};
@@ -347,13 +348,13 @@ fn detect_pitches(
         }
 
         // A peak that is a harmonic of a lower peak is not a fundamental.
+        // We check against ALL non-explained lower-frequency peaks, even
+        // weaker ones: a strong harmonic can be louder than its fundamental,
+        // so we must not accept a harmonic as a fundamental just because the
+        // fundamental is quieter.
         let mut is_harmonic = false;
         for (other_index, other) in ordered.iter().enumerate() {
             if other_index == index || explained[other_index] {
-                continue;
-            }
-            let other_magnitude = peak_magnitude(spectrum, other);
-            if other_magnitude < magnitude * 0.15 {
                 continue;
             }
             let ratio = peak.frequency / other.frequency;
@@ -365,8 +366,48 @@ fn detect_pitches(
             }
         }
         if is_harmonic {
-            explained[index] = true;
-            continue;
+            // Before giving up on this peak, check whether it has independent
+            // harmonic support: a peak that is a harmonic of an accepted note
+            // might also be the fundamental of a separate, higher note (e.g.
+            // A3 at 440 Hz is both A2's 4th harmonic and a note in its own
+            // right). Look for its own upper harmonics that are not explained
+            // by the accepted note.
+            let mut independent_support = 0.0;
+            let mut independent_harmonics = 0usize;
+            for harmonic in 2..=config.harmonics {
+                let frequency = peak.frequency * harmonic as f64;
+                if frequency >= config.sample_rate as f64 / 2.0 {
+                    break;
+                }
+                let value = magnitude_at(spectrum, frequency, config.sample_rate, fft_size);
+                if value > strongest * 0.02 {
+                    // Check whether this upper harmonic is also explained by
+                    // an already-accepted note; if not, it supports this peak
+                    // as an independent fundamental.
+                    let mut explained_by_other = false;
+                    for accepted_pitch in &accepted {
+                        let af = accepted_pitch.pitch.to_hz();
+                        let ratio = frequency / af;
+                        let h = ratio.round();
+                        if (2.0..=8.0).contains(&h) && (ratio - h).abs() < 0.06 {
+                            explained_by_other = true;
+                            break;
+                        }
+                    }
+                    if !explained_by_other {
+                        independent_support += value;
+                        independent_harmonics += 1;
+                    }
+                }
+            }
+            if independent_harmonics > 0 && independent_support > magnitude * 0.05 {
+                // This peak has independent harmonic support: treat it as a
+                // separate fundamental despite being a harmonic of another
+                // note. Don't mark it as explained.
+            } else {
+                explained[index] = true;
+                continue;
+            }
         }
 
         // The harmonic support of this peak.
@@ -425,6 +466,61 @@ fn detect_pitches(
             }
         }
     }
+
+    // Sub-harmonic consolidation: if an accepted fundamental is actually a
+    // harmonic of a lower note, promote the lower note instead. We detect
+    // this by checking whether a sub-harmonic (f/2 or f/3) has a complete
+    // harmonic series: peaks at 2x, 3x, 4x, etc. of the sub-harmonic that
+    // match the observed spectrum. This is how we identify E2 (82 Hz) when
+    // its fundamental bin is weak but its harmonics (E3 at 165 Hz, B3 at 247 Hz,
+    // E4 at 330 Hz) are all strong.
+    let mut consolidated: Vec<PolyFramePitch> = Vec::new();
+    for accepted_pitch in &accepted {
+        let freq = accepted_pitch.pitch.to_hz();
+        let mut promoted = false;
+        for divisor in [2.0, 3.0] {
+            let sub_freq = freq / divisor;
+            if sub_freq < config.min_frequency {
+                continue;
+            }
+            // Count how many harmonics of the sub-harmonic are present in
+            // the spectrum. If most are present, the sub-harmonic is the
+            // true fundamental.
+            let mut harmonic_matches = 0usize;
+            let mut total_harmonics = 0usize;
+            for h in 2..=8 {
+                let harmonic_freq = sub_freq * h as f64;
+                if harmonic_freq >= config.sample_rate as f64 / 2.0 {
+                    break;
+                }
+                total_harmonics += 1;
+                let value = magnitude_at(spectrum, harmonic_freq, config.sample_rate, fft_size);
+                if value > strongest * 0.02 {
+                    harmonic_matches += 1;
+                }
+            }
+            if total_harmonics > 0 && harmonic_matches >= total_harmonics * 2 / 3 {
+                // At least 2/3 of the sub-harmonic's harmonics are present:
+                // the sub-harmonic is the true fundamental.
+                if let Some(pitch) = crate::music::MidiNote::from_hz(sub_freq) {
+                    if !accepted.iter().any(|p| p.pitch.as_u8() == pitch.as_u8())
+                        && !consolidated.iter().any(|p| p.pitch.as_u8() == pitch.as_u8())
+                    {
+                        consolidated.push(PolyFramePitch {
+                            pitch,
+                            confidence: accepted_pitch.confidence * 0.95,
+                        });
+                        promoted = true;
+                    }
+                }
+                break;
+            }
+        }
+        if !promoted {
+            consolidated.push(*accepted_pitch);
+        }
+    }
+    let mut accepted = consolidated;
 
     // A bare sine has no harmonics, so nothing was accepted. The strongest
     // peak is then the note.
@@ -498,7 +594,7 @@ impl Transcriber for PolyphonicTranscriber {
 /// A single frame is not a note: it is the transient at the boundary between
 /// two chords, where the spectrum of both is present at once and the peak
 /// picker reports notes that belong to neither.
-const MIN_FRAMES: usize = 3;
+const MIN_FRAMES: usize = 2;
 
 /// Turn the per-frame pitch sets into note events.
 ///
@@ -511,81 +607,180 @@ pub fn notes_from_frames(
     frame_duration: f64,
     min_note_seconds: f64,
 ) -> Vec<NoteEvent> {
-    // Collect, for every pitch, the frames where it was present.
-    let mut occurrences: Vec<(u8, Vec<usize>)> = Vec::new();
-    for (index, frame) in frames.iter().enumerate() {
-        for pitch in &frame.pitches {
-            let key = pitch.pitch.as_u8();
-            match occurrences.iter_mut().find(|(k, _)| *k == key) {
-                Some((_, list)) => list.push(index),
-                None => occurrences.push((key, vec![index])),
-            }
-        }
-    }
+    use std::collections::HashMap;
 
-    let mut notes = Vec::new();
-    for (key, indices) in occurrences {
-        // Split the frames into runs.
-        let mut runs: Vec<Vec<usize>> = Vec::new();
-        let mut current: Vec<usize> = Vec::new();
-        for index in indices {
-            match current.last() {
-                Some(&last) if index == last + 1 => current.push(index),
-                _ => {
-                    if !current.is_empty() {
-                        runs.push(std::mem::take(&mut current));
+    // Track, for every pitch, the frame index where its current note started.
+    let mut active: HashMap<u8, usize> = HashMap::new();
+
+    let mut notes: Vec<NoteEvent> = Vec::new();
+
+    for (frame_index, frame) in frames.iter().enumerate() {
+        let current_pitches: Vec<u8> = frame
+            .pitches
+            .iter()
+            .map(|p| p.pitch.as_u8())
+            .collect();
+        let current_set: HashSet<u8> = current_pitches.iter().copied().collect();
+
+        // End notes for pitches that were active but are not present now.
+        let ended: Vec<u8> = active
+            .keys()
+            .copied()
+            .filter(|p| !current_set.contains(p))
+            .collect();
+        for pitch in &ended {
+            if let Some(start_frame) = active.remove(pitch) {
+                let run_len = frame_index - start_frame;
+                if run_len >= MIN_FRAMES {
+                    let start = (frames[start_frame].time - frame_duration / 2.0).max(0.0);
+                    let end = (frames[frame_index - 1].time + frame_duration / 2.0).max(start);
+                    let duration = end - start;
+                    if duration >= min_note_seconds {
+                        let mut best_conf = 0.0f64;
+                        for fi in start_frame..=frame_index - 1 {
+                            for p in &frames[fi].pitches {
+                                if p.pitch.as_u8() == *pitch {
+                                    best_conf = best_conf.max(p.confidence);
+                                }
+                            }
+                        }
+                        if let Ok(p) = MidiNote::new(*pitch) {
+                            notes.push(NoteEvent {
+                                pitch: p,
+                                start: Seconds::from_secs(start),
+                                end: Seconds::from_secs(end),
+                                velocity: 80,
+                                confidence: best_conf as f32,
+                            });
+                        }
                     }
-                    current.push(index);
                 }
             }
         }
-        if !current.is_empty() {
-            runs.push(current);
-        }
 
-        // Bridge the gaps of a single frame.
-        let mut merged: Vec<Vec<usize>> = Vec::new();
-        for run in runs {
-            match merged.last_mut() {
-                Some(last) if run[0] == last[last.len() - 1] + 2 => {
-                    last.extend(run);
-                }
-                _ => merged.push(run),
+        // Start new notes for pitches that are present now but weren't
+        // active before (new onsets).
+        for pitch in &current_pitches {
+            if !active.contains_key(pitch) {
+                active.insert(*pitch, frame_index);
             }
-        }
-
-        for run in merged {
-            if run.len() < MIN_FRAMES {
-                continue;
-            }
-            let start = (frames[run[0]].time - frame_duration / 2.0).max(0.0);
-            let end = frames[run[run.len() - 1]].time + frame_duration / 2.0;
-            let duration = end - start;
-            if duration < min_note_seconds {
-                continue;
-            }
-            let confidence = run
-                .iter()
-                .filter_map(|&index| {
-                    frames[index]
-                        .pitches
-                        .iter()
-                        .find(|p| p.pitch.as_u8() == key)
-                        .map(|p| p.confidence)
-                })
-                .fold(0.0f64, f64::max);
-            let Ok(pitch) = MidiNote::new(key) else {
-                continue;
-            };
-            notes.push(NoteEvent {
-                pitch,
-                start: Seconds::from_secs(start),
-                end: Seconds::from_secs(end),
-                velocity: 80,
-                confidence: confidence as f32,
-            });
         }
     }
+
+    // End any notes still active at the end of the signal.
+    let final_frame = frames.len();
+    for (pitch, &start_frame) in &active {
+        let run_len = final_frame - start_frame;
+        if run_len >= MIN_FRAMES {
+            let start = (frames[start_frame].time - frame_duration / 2.0).max(0.0);
+            let end = (frames[frames.len() - 1].time + frame_duration / 2.0).max(start);
+            let duration = end - start;
+            if duration >= min_note_seconds {
+                let mut best_conf = 0.0f64;
+                for fi in start_frame..frames.len() {
+                    for p in &frames[fi].pitches {
+                        if p.pitch.as_u8() == *pitch {
+                            best_conf = best_conf.max(p.confidence);
+                        }
+                    }
+                }
+                if let Ok(p) = MidiNote::new(*pitch) {
+                    notes.push(NoteEvent {
+                        pitch: p,
+                        start: Seconds::from_secs(start),
+                        end: Seconds::from_secs(end),
+                        velocity: 80,
+                        confidence: best_conf as f32,
+                    });
+                }
+            }
+        }
+    }
+
+    // Merge notes of the same pitch whose time ranges overlap or are
+    // adjacent: a pitch whose detection flickered between frames can appear
+    // as several short notes where there should be one.
+    let mut by_pitch: Vec<Vec<NoteEvent>> = Vec::new();
+    for note in &notes {
+        match by_pitch.iter_mut().find(|g| g[0].pitch == note.pitch) {
+            Some(group) => group.push(note.clone()),
+            None => by_pitch.push(vec![note.clone()]),
+        }
+    }
+
+    let mut merged_notes: Vec<NoteEvent> = Vec::new();
+    for mut group in by_pitch {
+        group.sort_by(|a, b| {
+            a.start
+                .as_secs()
+                .partial_cmp(&b.start.as_secs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut current = group.remove(0);
+        for next in group {
+            if next.start.as_secs() - current.end.as_secs() <= frame_duration * 2.0 {
+                // Overlapping or adjacent: extend the current note.
+                if next.end.as_secs() > current.end.as_secs() {
+                    current.end = next.end;
+                }
+                current.confidence = current.confidence.max(next.confidence);
+            } else {
+                merged_notes.push(std::mem::replace(&mut current, next));
+            }
+        }
+        merged_notes.push(current);
+    }
+
+    // Filter out low-confidence and very short notes. A note that is both
+    // weak and brief is almost certainly a spectral artifact. The minimum
+    // duration of 0.1s removes attack transients and spectral flicker that
+    // don't correspond to real notes.
+    merged_notes.retain(|note| {
+        let duration = note.end.as_secs() - note.start.as_secs();
+        note.confidence >= 0.6 && duration >= 0.1
+    });
+
+    // Remove short-duration duplicates: when the same pitch has two notes
+    // that overlap, keep only the longer one.
+    let mut by_pitch2: Vec<Vec<usize>> = Vec::new();
+    for (i, note) in merged_notes.iter().enumerate() {
+        match by_pitch2.iter_mut().find(|g| merged_notes[g[0]].pitch == note.pitch) {
+            Some(group) => group.push(i),
+            None => by_pitch2.push(vec![i]),
+        }
+    }
+
+    let mut to_remove: Vec<usize> = Vec::new();
+    for group in &by_pitch2 {
+        for i in 0..group.len() {
+            for j in (i + 1)..group.len() {
+                let a = &merged_notes[group[i]];
+                let b = &merged_notes[group[j]];
+                let a_start = a.start.as_secs();
+                let a_end = a.end.as_secs();
+                let b_start = b.start.as_secs();
+                let b_end = b.end.as_secs();
+                if a_start < b_end && b_start < a_end {
+                    let a_dur = a_end - a_start;
+                    let b_dur = b_end - b_start;
+                    if a_dur < 0.15 && a_dur < b_dur {
+                        to_remove.push(group[i]);
+                    } else if b_dur < 0.15 && b_dur < a_dur {
+                        to_remove.push(group[j]);
+                    }
+                }
+            }
+        }
+    }
+    to_remove.sort();
+    to_remove.dedup();
+    let mut kept: Vec<NoteEvent> = Vec::new();
+    for (i, note) in merged_notes.iter().enumerate() {
+        if !to_remove.contains(&i) {
+            kept.push(note.clone());
+        }
+    }
+    let mut notes = kept;
 
     notes.sort_by(|a, b| {
         a.start
@@ -595,8 +790,6 @@ pub fn notes_from_frames(
     });
     notes
 }
-
-#[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
