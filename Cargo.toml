@@ -1,0 +1,85 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tabscribe-core",
+    "crates/tabscribe-cli",
+    "crates/tabscribe-models",
+    "crates/tabscribe-eval",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "Apache-2.0"
+authors = ["tabscribe contributors"]
+repository = "https://github.com/OWNER/tabscribe"
+readme = "README.md"
+keywords = ["music", "transcription", "tablature", "midi", "mir"]
+categories = ["multimedia::audio", "command-line-utilities"]
+
+[workspace.dependencies]
+# --- internal crates ---
+tabscribe-core = { path = "crates/tabscribe-core", version = "0.1.0" }
+tabscribe-models = { path = "crates/tabscribe-models", version = "0.1.0" }
+tabscribe-eval = { path = "crates/tabscribe-eval", version = "0.1.0" }
+
+# --- audio io ---
+symphonia = { version = "0.6", default-features = false, features = ["all"] }
+
+# --- dsp ---
+realfft = "3.5"
+rustfft = "6.4"
+ndarray = "0.17"
+
+# --- output ---
+midly = "0.5"
+quick-xml = "0.42"
+
+# --- cli ---
+clap = { version = "4.6", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4.6"
+clap_mangen = "0.3"
+indicatif = "0.18"
+console = "0.16"
+
+# --- plumbing ---
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "1.0"
+thiserror = "2.0"
+anyhow = "1.0"
+rayon = "1.12"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+sha2 = "0.11"
+hex = "0.4"
+
+# --- test / bench ---
+proptest = "1.12"
+insta = { version = "1.49", features = ["yaml"] }
+criterion = { version = "0.8", features = ["html_reports"] }
+assert_cmd = "2.2"
+tempfile = "3.27"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Benchmarks are never optimized-for-size; keep them debuggable and unwindable
+# (criterion relies on unwinding to detect failures).
+[profile.bench]
+debug = true
+panic = "unwind"
+
+# Dependencies compile unoptimised so that a cold build stays fast; the
+# workspace crates themselves keep a little optimisation so the DSP code is
+# usable in a debug build.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 0

@@ -1,0 +1,16 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# Local datasets and downloaded artifacts (see scripts/fetch_datasets.sh)
+/datasets
+/*.onnx
+!/models/*.onnx
+/eval-out
+/bench-out
+/criterion
+
+# Editor / OS noise
+.idea/
+.vscode/
+.DS_Store

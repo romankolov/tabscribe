@@ -1,0 +1,64 @@
+[package]
+name = "tabscribe-core"
+description = "Core transcription, music-theory and tablature-assignment algorithms for tabscribe."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+tabscribe-models = { workspace = true }
+symphonia = { workspace = true }
+realfft = { workspace = true }
+ndarray = { workspace = true }
+rustfft = { workspace = true }
+midly = { workspace = true }
+quick-xml = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+rayon = { workspace = true }
+tracing = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+clap = { workspace = true, optional = true }
+
+tract-onnx = { version = "0.23", optional = true, default-features = false }
+ort = { version = "2.0.0-rc.15", optional = true, default-features = false, features = ["ndarray"] }
+
+[dev-dependencies]
+proptest = { workspace = true }
+insta = { workspace = true }
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[features]
+# The neural engines are optional: the default build is the pure-Rust DSP
+# engine only, which keeps the build light and the binary portable. Build with
+# `--features neural-tract` (pure Rust ONNX) or `--features neural-ort`
+# (ONNX Runtime) to enable polyphonic neural transcription.
+default = []
+# Pure-Rust ONNX inference: no external shared libraries, ships anywhere.
+neural-tract = ["dep:tract-onnx"]
+# ONNX Runtime backend (faster, but requires prebuilt native binaries).
+neural-ort = ["dep:ort"]
+# Pull in `clap` value parsers for downstream binaries.
+clap-parsers = ["dep:clap"]
+
+[[bench]]
+name = "tab_assign"
+harness = false
+
+[[bench]]
+name = "dsp"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
