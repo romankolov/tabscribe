@@ -119,6 +119,8 @@ pub enum EngineArg {
     Dsp,
     /// The polyphonic spectral engine.
     Polyphonic,
+    /// Onset-gated detection: analyses a short window at each detected onset.
+    OnsetGated,
 }
 
 /// How aggressively to quantize the transcribed rhythm.

@@ -441,6 +441,100 @@ const SALIENCE_EXPONENT: f64 = 1.0;
 /// The number of harmonics used by the salience.
 const SALIENCE_HARMONICS: usize = 6;
 
+
+
+/// Harmonic Product Spectrum (HPS) fundamental detection.
+///
+/// HPS handles the missing/weak fundamental problem by multiplying the
+/// magnitude spectrum by its downsampled copies. If harmonics at 2f, 3f,
+/// 4f, etc. are present in the spectrum, they all align at f in the product
+/// spectrum, reinforcing the fundamental even when it has little energy.
+///
+/// This is the classic cure for YIN locking onto a harmonic (e.g. detecting
+/// B3 at 247 Hz instead of E2 at 82 Hz) when the true fundamental is weak
+/// but its harmonics are strong.
+///
+/// Returns the detected fundamental frequency in Hz, or 0.0 if no clear
+/// fundamental is found.
+#[must_use]
+pub fn hps_fundamental(
+    spectrum: &[f32],
+    bin_hz: f64,
+    min_frequency: f64,
+    max_frequency: f64,
+    num_hps: usize,
+) -> f64 {
+    if spectrum.is_empty() || bin_hz <= 0.0 {
+        return 0.0;
+    }
+
+    // Interpolate the spectrum to have more points for better HPS resolution.
+    // We upsample by a factor of 4 to get finer frequency resolution.
+    let upsampled_len = spectrum.len() * 4;
+    let mut upsampled: Vec<f64> = vec![0.0; upsampled_len];
+    for i in 0..upsampled_len {
+        let src_pos = i as f64 / 4.0;
+        let idx = src_pos as usize;
+        let frac = src_pos - idx as f64;
+        if idx + 1 < spectrum.len() {
+            upsampled[i] = spectrum[idx] as f64 * (1.0 - frac)
+                + spectrum[idx + 1] as f64 * frac;
+        } else if idx < spectrum.len() {
+            upsampled[i] = spectrum[idx] as f64;
+        }
+    }
+
+    // Normalize the upsampled spectrum.
+    let max_val = upsampled.iter().copied().fold(0.0f64, f64::max);
+    if max_val <= 0.0 {
+        return 0.0;
+    }
+    for v in &mut upsampled {
+        *v /= max_val;
+    }
+
+    // Start with a copy of the upsampled spectrum.
+    let mut hps = upsampled.clone();
+
+    // Multiply by downsampled copies: every 2nd, 3rd, ... num_hps-th point.
+    for factor in 2..=num_hps {
+        let down_len = upsampled_len / factor;
+        if down_len == 0 {
+            break;
+        }
+        for i in 0..down_len {
+            hps[i] *= upsampled[i * factor];
+        }
+        // Zero out beyond the downsampled length.
+        for i in down_len..upsampled_len {
+            hps[i] = 0.0;
+        }
+    }
+
+    // Find the peak in the valid frequency range.
+    let min_bin = (min_frequency / (bin_hz / 4.0)).floor() as usize;
+    let max_bin = ((max_frequency / (bin_hz / 4.0)).ceil() as usize).min(upsampled_len - 1);
+    if min_bin >= max_bin {
+        return 0.0;
+    }
+
+    let mut best_bin = min_bin;
+    let mut best_val = hps[min_bin];
+    for i in (min_bin + 1)..=max_bin {
+        if hps[i] > best_val {
+            best_val = hps[i];
+            best_bin = i;
+        }
+    }
+
+    if best_val <= 0.0 {
+        return 0.0;
+    }
+
+    let effective_bin_hz = bin_hz / 4.0;
+    best_bin as f64 * effective_bin_hz
+}
+
 /// Run the frame-level analysis.
 #[must_use]
 pub fn analyze_frames(signal: &[f32], config: &YinConfig) -> FrameAnalysis {
@@ -503,13 +597,43 @@ pub fn analyze_frames(signal: &[f32], config: &YinConfig) -> FrameAnalysis {
             0.0
         };
 
-        // Missing fundamental check: guitar open strings in standard tuning
-        // are E2(82.4), A2(110.0), D3(146.8), G3(196.0), B3(246.9), E4(329.6).
-        // When the detector locks onto a harmonic (e.g. B3 at 247 Hz instead
-        // of E2 at 82 Hz), the detected frequency is often an exact integer
-        // multiple of the true fundamental. We check: is the detected
-        // frequency 2x or 3x a guitar open string? If so, and the lower
-        // frequency has any spectral energy, prefer the open string.
+        // Harmonic Product Spectrum: handle missing/weak fundamental.
+        // When YIN locks onto a harmonic (e.g. B3 at 247 Hz instead of E2
+        // at 82 Hz), HPS reinforces the true fundamental by multiplying the
+        // spectrum with its downsampled copies.
+        if frequency > 0.0 {
+            let hps_freq = hps_fundamental(
+                &spectrum,
+                bin_hz,
+                config.min_frequency,
+                config.max_frequency,
+                5,
+            );
+            if hps_freq > 0.0
+                && (hps_freq - frequency).abs() > frequency * 0.1
+                && hps_freq >= config.min_frequency
+            {
+                // HPS found a different (lower) frequency. Check if it's a
+                // sub-harmonic of the YIN result (i.e. YIN picked a harmonic).
+                let ratio = frequency / hps_freq;
+                let harmonic = ratio.round();
+                if (2.0..=6.0).contains(&harmonic) && (ratio - harmonic).abs() < 0.1 {
+                    // HPS found the true fundamental; YIN picked a harmonic.
+                    frequency = hps_freq;
+                    let corrected_lag =
+                        (config.sample_rate as f64 / frequency).round() as usize;
+                    for c in posterior.candidates.iter_mut() {
+                        if c.lag == lag {
+                            c.lag = corrected_lag;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Guitar open string refinement: if HPS didn't correct but YIN is
+        // on a harmonic of a guitar open string, correct to the open string.
         if frequency > 0.0 {
             let open_strings: [f64; 6] = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
             for divisor in [2.0, 3.0] {

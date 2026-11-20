@@ -197,6 +197,17 @@ impl Pipeline {
             self.transcriber
                 .transcribe(signal, sample_rate, &self.options.detection)?;
 
+        // ── 1a. Leading silence removal ───────────────────────────────────
+        //
+        // Remove any notes that start before the first significant onset of
+        // the piece. This prevents spurious detections during the silent
+        // lead-in of a recording.
+        let spectrum_config = crate::transcribe::rhythm::SpectrumConfig::for_sample_rate(sample_rate);
+        let envelope = crate::transcribe::rhythm::onset_envelope(signal, sample_rate, &spectrum_config);
+        if let Some(first_onset) = first_significant_onset(&envelope) {
+            notes.retain(|note| note.start.as_secs() >= first_onset - 0.05);
+        }
+
         // ── 1b. Tuning offset ─────────────────────────────────────────────
         //
         // When a recording is tuned sharp or flat relative to standard pitch,
@@ -395,6 +406,30 @@ fn build_measures(notes: &[TabNote], tempo: Tempo, meter: TimeSignature) -> Vec<
             }
         })
         .collect()
+}
+
+
+
+/// Find the time of the first significant onset in the signal.
+///
+/// Returns the time in seconds of the first frame where the onset envelope
+/// exceeds 5% of the maximum, or None if the signal is silent.
+#[must_use]
+fn first_significant_onset(envelope: &crate::transcribe::rhythm::OnsetEnvelope) -> Option<f64> {
+    if envelope.values.is_empty() {
+        return None;
+    }
+    let max = envelope.values.iter().copied().fold(0.0f32, f32::max);
+    if max <= 0.0 {
+        return None;
+    }
+    let threshold = max * 0.05;
+    for (i, &value) in envelope.values.iter().enumerate() {
+        if value >= threshold {
+            return Some(envelope.times[i]);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

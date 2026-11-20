@@ -302,6 +302,152 @@ fn loudest_frame_energy(signal: &[f32], config: &PolyConfig) -> f64 {
     loudest
 }
 
+
+
+/// Harmonic Product Spectrum score for a candidate fundamental frequency.
+///
+/// Multiplies the spectrum at f, 2f, 3f, ... up to `max_harmonic`. A true
+/// fundamental has energy at all its harmonics, so the product is large.
+/// Frequencies that are only partials of something else (e.g. B3 when E2 is
+/// the real note) score poorly because their own "harmonics" don't line up
+/// with the spectrum.
+#[must_use]
+fn hps_score(
+    spectrum: &[f64],
+    candidate_hz: f64,
+    sample_rate: u32,
+    fft_size: usize,
+    max_harmonic: usize,
+) -> f64 {
+    let nyquist = sample_rate as f64 / 2.0;
+    let mut product = 1.0f64;
+    let mut count = 0usize;
+    for h in 1..=max_harmonic {
+        let freq = candidate_hz * h as f64;
+        if freq >= nyquist {
+            break;
+        }
+        let value = magnitude_at(spectrum, freq, sample_rate, fft_size);
+        product *= value.max(1.0);
+        count += 1;
+    }
+    if count == 0 {
+        return 0.0;
+    }
+    // Geometric mean so longer series don't dominate just by having more terms.
+    product.powf(1.0 / count as f64)
+}
+
+/// Refinement of detect_pitches using HPS: when a candidate peak's own HPS
+/// score is weak but a sub-harmonic's HPS score is strong, the sub-harmonic
+/// is the true fundamental (missing fundamental case).
+fn refine_with_hps(
+    peak_freq: f64,
+    spectrum: &[f64],
+    sample_rate: u32,
+    fft_size: usize,
+    strongest: f64,
+) -> Option<f64> {
+    let nyquist = sample_rate as f64 / 2.0;
+    let hps_at_peak = hps_score(spectrum, peak_freq, sample_rate, fft_size, 6);
+
+    // If the peak itself has strong HPS support, it's likely a real fundamental.
+    if hps_at_peak > strongest * 0.001 {
+        return None;
+    }
+
+    // Otherwise check sub-harmonics f/2, f/3 for stronger HPS support.
+    let mut best_freq = peak_freq;
+    let mut best_score = hps_at_peak;
+    for divisor in [2.0, 3.0, 4.0] {
+        let sub_freq = peak_freq / divisor;
+        if sub_freq < 50.0 {
+            continue;
+        }
+        let score = hps_score(spectrum, sub_freq, sample_rate, fft_size, 6);
+        if score > best_score * 1.5 {
+            best_score = score;
+            best_freq = sub_freq;
+        }
+    }
+
+    if best_freq != peak_freq {
+        Some(best_freq)
+    } else {
+        None
+    }
+}
+
+
+
+/// Missing-fundamental pre-pass: find groups of peaks that form harmonic
+/// series and infer the fundamental even when it is not directly present.
+///
+/// This handles the case where E2's fundamental bin is weak but its
+/// harmonics (E3 at 165 Hz, B3 at 247 Hz, E4 at 330 Hz) are all strong.
+/// The detector would otherwise miss E2 entirely and report its harmonics
+/// as separate notes.
+fn infer_missing_fundamentals(
+    peaks: &[Peak],
+    spectrum: &[f64],
+    sample_rate: u32,
+    fft_size: usize,
+    strongest: f64,
+) -> Vec<(f64, f64)> {
+    // Guitar-playable fundamentals in the relevant range
+    let string_bases = [82.41f64, 110.0, 146.83, 196.0, 246.94, 329.63];
+    let mut guitar_freqs: Vec<f64> = Vec::new();
+    for &base in &string_bases {
+        for fret in 0..=12 {
+            let freq = base * 2.0f64.powf(fret as f64 / 12.0);
+            if freq < sample_rate as f64 / 2.0 && freq > 60.0 {
+                guitar_freqs.push(freq);
+            }
+        }
+    }
+
+    let mut results: Vec<(f64, f64)> = Vec::new(); // (frequency, confidence)
+
+    for &gf in &guitar_freqs {
+        // Count how many harmonics of gf are present as peaks
+        let mut harmonic_matches = 0usize;
+        let mut total_harmonics = 0usize;
+        let mut harmonic_strength = 0.0f64;
+
+        for h in 2..=8 {
+            let h_freq = gf * h as f64;
+            if h_freq >= sample_rate as f64 / 2.0 {
+                break;
+            }
+            total_harmonics += 1;
+            let value = magnitude_at(spectrum, h_freq, sample_rate, fft_size);
+            if value > strongest * 0.015 {
+                // Check if there's a peak near this harmonic
+                let has_peak = peaks.iter().any(|p| {
+                    (p.frequency - h_freq).abs() < h_freq * 0.03
+                });
+                if has_peak {
+                    harmonic_matches += 1;
+                    harmonic_strength += value;
+                }
+            }
+        }
+
+        if total_harmonics > 0 && harmonic_matches >= total_harmonics / 2 {
+            // At least half of the harmonics are present
+            let coverage = harmonic_matches as f64 / total_harmonics as f64;
+            let strength = harmonic_strength / harmonic_matches.max(1) as f64;
+            let confidence = (coverage * 0.7 + (strength / strongest).min(1.0) * 0.3).clamp(0.0, 1.0);
+            if confidence > 0.4 {
+                results.push((gf, confidence));
+            }
+        }
+    }
+
+    results
+}
+
+/// Detect the pitches of one frame from its spectral peaks.
 /// Detect the pitches of one frame from its spectral peaks.
 fn detect_pitches(
     peaks: &[Peak],
@@ -321,6 +467,10 @@ fn detect_pitches(
         return Vec::new();
     }
 
+    // Missing-fundamental pre-pass: infer fundamentals from harmonic groups.
+    let inferred = infer_missing_fundamentals(peaks, spectrum, config.sample_rate, fft_size, strongest);
+    let mut inferred_freqs: Vec<f64> = inferred.iter().map(|(f, _)| *f).collect();
+
     // The peaks, strongest first.
     let mut ordered: Vec<&Peak> = peaks.iter().collect();
     ordered.sort_by(|a, b| {
@@ -333,6 +483,33 @@ fn detect_pitches(
     // fundamental.
     let mut explained = vec![false; ordered.len()];
     let mut accepted: Vec<PolyFramePitch> = Vec::new();
+
+    // First, accept any inferred missing fundamentals.
+    for &inf_freq in &inferred_freqs {
+        if accepted.len() >= config.max_polyphony {
+            break;
+        }
+        if let Some(pitch) = crate::music::MidiNote::from_hz(inf_freq) {
+            if !accepted.iter().any(|p| p.pitch.as_u8() == pitch.as_u8()) {
+                // Find the confidence for this inferred frequency
+                let conf = inferred.iter().find(|(f, _)| (*f - inf_freq).abs() < 1.0)
+                    .map(|(_, c)| *c).unwrap_or(0.5);
+                accepted.push(PolyFramePitch { pitch, confidence: conf });
+            }
+        }
+    }
+
+    // Mark peaks that are harmonics of inferred fundamentals as explained.
+    for (index, peak) in ordered.iter().enumerate() {
+        for &inf_freq in &inferred_freqs {
+            let ratio = peak.frequency / inf_freq;
+            let h = ratio.round();
+            if h >= 2.0 && h <= 8.0 && (ratio - h).abs() < 0.08 {
+                explained[index] = true;
+                break;
+            }
+        }
+    }
 
     for (index, peak) in ordered.iter().enumerate() {
         if accepted.len() >= config.max_polyphony {
@@ -444,7 +621,17 @@ fn detect_pitches(
             continue;
         }
 
-        let midi = crate::music::MidiNote::from_hz(peak.frequency);
+        // HPS refinement: if this peak's HPS score is weak but a sub-harmonic's
+        // is strong, use the sub-harmonic instead (handles missing fundamental).
+        let hps_refined = refine_with_hps(
+            peak.frequency,
+            spectrum,
+            config.sample_rate,
+            fft_size,
+            strongest,
+        );
+        let final_freq = hps_refined.unwrap_or(peak.frequency);
+        let midi = crate::music::MidiNote::from_hz(final_freq);
         if let Some(pitch) = midi {
             if accepted.iter().any(|p| p.pitch.as_u8() == pitch.as_u8()) {
                 continue;

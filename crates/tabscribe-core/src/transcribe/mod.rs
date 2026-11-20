@@ -14,6 +14,7 @@ use crate::transcription::NoteEvent;
 pub mod cleanup;
 pub mod dsp;
 pub mod harmony;
+pub mod onset_gated;
 pub mod poly;
 pub mod rhythm;
 
@@ -101,6 +102,8 @@ pub enum Engine {
     Dsp,
     /// The polyphonic spectral engine.
     Polyphonic,
+    /// Onset-gated detection: analyses a short window at each detected onset.
+    OnsetGated,
 }
 
 impl Engine {
@@ -112,28 +115,32 @@ impl Engine {
             Engine::Neural => "neural",
             Engine::Dsp => "dsp",
             Engine::Polyphonic => "polyphonic",
+            Engine::OnsetGated => "onset-gated",
         }
     }
 }
 
-/// The engine that picks the best analyser for the material.
+/// The engine that combines onset-gated and monophonic detection.
 ///
-/// The choice is made from the periodicity of the signal: a signal that is
-/// well explained by a single period uses the monophonic detector, which is
-/// more accurate; a signal that is not uses the polyphonic detector.
+/// The engine that combines polyphonic and monophonic detection.
+///
+/// The polyphonic detector provides good onset coverage for chords and
+/// arpeggios, while the monophonic detector provides accurate single-note
+/// pitches. Missing-fundamental inference in the polyphonic detector handles
+/// the case where a note's fundamental is weak but its harmonics are strong.
 #[derive(Debug, Clone)]
 pub struct AutoTranscriber {
-    /// The monophonic detector.
-    pub monophonic: DspTranscriber,
-    /// The polyphonic detector.
+    /// The polyphonic detector with missing-fundamental inference.
     pub polyphonic: crate::transcribe::poly::PolyphonicTranscriber,
+    /// The monophonic detector, used for accurate single-note verification.
+    pub monophonic: DspTranscriber,
 }
 
 impl Default for AutoTranscriber {
     fn default() -> Self {
         AutoTranscriber {
-            monophonic: DspTranscriber::new(),
             polyphonic: crate::transcribe::poly::PolyphonicTranscriber::new(),
+            monophonic: DspTranscriber::new(),
         }
     }
 }
@@ -157,10 +164,38 @@ impl Transcriber for AutoTranscriber {
         sample_rate: u32,
         options: &TranscribeOptions,
     ) -> Result<Vec<NoteEvent>> {
-        match estimate_material(signal) {
-            Material::Monophonic => self.monophonic.transcribe(signal, sample_rate, options),
-            Material::Polyphonic => self.polyphonic.transcribe(signal, sample_rate, options),
+        // Hybrid: polyphonic detector provides onset coverage; monophonic
+        // detector provides accurate single-note pitches.
+        let poly_notes = self.polyphonic.transcribe(signal, sample_rate, options)?;
+        let mono_notes = self.monophonic.transcribe(signal, sample_rate, options)?;
+
+        // Start with polyphonic notes (better onset coverage), then add
+        // monophonic notes at onsets the polyphonic detector missed.
+        let mut merged: Vec<NoteEvent> = poly_notes;
+
+        for mono_note in &mono_notes {
+            // Only add mono notes that don't overlap with any polyphonic note
+            // of the same pitch (to avoid duplicates).
+            let overlaps = merged.iter().any(|poly_note| {
+                poly_note.pitch == mono_note.pitch
+                    && poly_note.start.as_secs() < mono_note.end.as_secs()
+                    && mono_note.start.as_secs() < poly_note.end.as_secs()
+            });
+            if !overlaps {
+                // Only add mono notes with decent confidence
+                if mono_note.confidence >= 0.5 {
+                    merged.push(mono_note.clone());
+                }
+            }
         }
+
+        merged.sort_by(|a, b| {
+            a.start
+                .as_secs()
+                .partial_cmp(&b.start.as_secs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(merged)
     }
 }
 

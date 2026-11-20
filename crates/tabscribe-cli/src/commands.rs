@@ -18,7 +18,7 @@ use tabscribe_core::tab::build::TabBuilder;
 use tabscribe_core::tab::cost::Style;
 use tabscribe_core::transcribe::cleanup::CleanupOptions;
 use tabscribe_core::transcribe::dsp::DspTranscriber;
-use tabscribe_core::transcribe::poly::PolyphonicTranscriber;
+use tabscribe_core::transcribe::{onset_gated::OnsetGatedTranscriber, poly::PolyphonicTranscriber};
 use tabscribe_core::transcribe::rhythm::QuantizeMode;
 use tabscribe_core::transcribe::AutoTranscriber;
 use tabscribe_core::transcribe::{TranscribeOptions, Transcriber};
@@ -85,6 +85,7 @@ pub fn transcribe(args: TranscribeArgs, global: &GlobalArgs) -> Result<()> {
         }
         EngineArg::Dsp => Box::new(DspTranscriber::new()),
         EngineArg::Polyphonic => Box::new(PolyphonicTranscriber::new()),
+        EngineArg::OnsetGated => Box::new(OnsetGatedTranscriber::new()),
         EngineArg::Auto => Box::new(AutoTranscriber::new()),
     };
     let engine_name = transcriber.name().to_string();
